@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scannerize
 
-## Getting Started
+Scannerize is a browser-only editor for final-stage PDF changes. It imports local PDFs as page backgrounds, places editable image and text layers over them, manages pages in a filmstrip, and downloads a flattened PDF. Document bytes never leave the browser.
 
-First, run the development server:
+## Features
+
+- Import a PDF or drop it onto the editor; dropping another PDF appends its pages.
+- Add, move, resize, rotate, reorder, hide, lock, duplicate, and delete image or text layers.
+- Edit text content, font, size, weight, alignment, color, opacity, and line height.
+- Add blank A4 pages; duplicate, rotate, reorder, and delete pages.
+- Undo and redo document edits.
+- Export at 96, 150, or 300 DPI as a flattened PDF.
+- Install and reopen the application offline after its first GitHub Pages visit.
+
+Imported PDF text, vectors, links, forms, and annotations are intentionally flattened during export; they are not edited as native PDF objects.
+
+## Interface
+
+The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows can be dragged to reorder them, and page actions are available from the thumbnail context menu.
+
+The interface uses shadcn/Base UI components installed through `shadcn add` and Lucide icons. It avoids dashboard-style cards: bordered containers are reserved for functional items such as page thumbnails, the paper surface, dialogs, and menus.
+
+Visual rules:
+
+- Keep labels and helper copy short; do not stack redundant titles, tags, subtitles, or descriptions.
+- Use the neutral-plus-orange semantic palette defined in `src/app/globals.css`.
+- Do not add colorful gradients, decorative textures, glow effects, glassmorphism, or scattered shadows.
+- Use locally bundled proportional fonts; do not use monospaced fonts.
+- Prefer flat surfaces, borders, spacing, and contrast. The paper surface is the one elevated workspace element.
+
+## Architecture
+
+Next.js uses `output: "export"` and produces a deployable `out/` directory. There are no route handlers, Server Actions, APIs, serverless functions, or document-processing services.
+
+- `pdfjs-dist` loads local PDF bytes and rasterizes page backgrounds in a locally emitted worker.
+- `react-konva` and `konva` render and transform editable overlay layers.
+- `zustand`, `immer`, and `zundo` hold the serializable document model and history.
+- `pdf-lib` creates the final PDF from page-sized flattened canvases.
+- Workbox generates `out/sw.js` after the static build and precaches the application shell.
+- Manrope Variable and Source Serif 4 Variable are bundled locally.
+
+Page and layer geometry is stored in PDF points, independent of screen zoom and export DPI. PDF.js proxies, decoded images, object URLs, and canvases stay in disposable runtime registries rather than editor history.
+
+Export is sequential: each source page is rasterized at the chosen DPI, visible overlays are drawn from the document model, the result is embedded into a same-size `pdf-lib` page, and the temporary canvas is released before the next page.
+
+## Offline and GitHub Pages
+
+GitHub Pages is the static host, not an application server. On the first visit it serves HTML, CSS, JavaScript, fonts, and the PDF.js worker. The generated service worker caches those assets so later visits can load with no connection. All import, editing, and export work is local on every visit.
+
+Direct `file://` execution is not supported because browsers restrict module workers and service workers there. This does not imply a backend: the deployment is the same static-site model as GitHub Pages.
+
+For a project site such as `https://owner.github.io/scannerize/`, build with:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_BASE_PATH=/scannerize pnpm build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The included GitHub Actions workflow derives that repository base path and deploys `out/`. A root-domain Pages site uses an empty base path.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm install
+pnpm dev
+pnpm lint
+pnpm build
+```
 
-## Learn More
+`pnpm build` uses Next's webpack builder because it is deterministic in restricted build environments, then generates the offline precache. The final route is statically prerendered.
 
-To learn more about Next.js, take a look at the following resources:
+## Current limits
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Editing targets desktop and tablet landscape; narrow screens show a width notice.
+- Text is edited in the properties panel rather than directly on the canvas.
+- Blank pages use A4 size.
+- Work is kept in memory until export; there is no autosaved project format yet.
+- Very large PDFs and 300 DPI exports remain subject to each browser's memory and canvas limits.

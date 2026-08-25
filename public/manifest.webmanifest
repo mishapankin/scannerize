@@ -1,0 +1,10 @@
+{
+  "name": "Scannerize",
+  "short_name": "Scannerize",
+  "description": "Offline PDF finishing in your browser.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f3f0e9",
+  "theme_color": "#d96a27"
+}
