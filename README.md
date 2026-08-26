@@ -8,6 +8,7 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 - Add, move, resize, rotate, reorder, hide, lock, duplicate, and delete image or text layers.
 - Edit text content, font, size, weight, alignment, color, opacity, and line height.
 - Add blank A4 pages; duplicate, rotate, reorder, and delete pages.
+- Preview pages with device-pixel-aware thumbnails for sharp text and image edges.
 - Undo and redo document edits.
 - Switch between Select (`V`), Pan (`H`), and drag-to-zoom (`Z`) tools. Trackpad panning, pinch zoom, Space-drag, and middle-button panning remain available while selecting.
 - Export at 96, 150, or 300 DPI as a flattened PDF.

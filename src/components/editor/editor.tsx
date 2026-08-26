@@ -104,6 +104,11 @@ type IconButtonProps = ComponentProps<typeof Button> & {
   label: string
 }
 
+const MAX_THUMBNAIL_WIDTH = 132
+const MAX_THUMBNAIL_HEIGHT = 160
+const MAX_THUMBNAIL_SCALE = 0.24
+const MAX_THUMBNAIL_PIXEL_RATIO = 2
+
 function IconButton({ label, children, ...props }: IconButtonProps) {
   const button = (
     <Button size="icon-sm" variant="ghost" aria-label={label} {...props}>
@@ -123,17 +128,58 @@ function IconButton({ label, children, ...props }: IconButtonProps) {
 
 function PageThumbnail({ page }: { page: EditorPage }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLSpanElement>(null)
+  const [availableWidth, setAvailableWidth] = useState(MAX_THUMBNAIL_WIDTH)
+
+  const displayScale = Math.min(
+    MAX_THUMBNAIL_SCALE,
+    availableWidth / page.widthPt,
+    MAX_THUMBNAIL_HEIGHT / page.heightPt
+  )
+  const displayWidth = page.widthPt * displayScale
+  const displayHeight = page.heightPt * displayScale
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const updateWidth = (width: number) => {
+      setAvailableWidth(
+        Math.max(1, Math.min(MAX_THUMBNAIL_WIDTH, Math.floor(width)))
+      )
+    }
+    updateWidth(container.getBoundingClientRect().width)
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) updateWidth(entry.contentRect.width)
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     let cancelled = false
-    const scale = Math.min(0.24, 132 / page.widthPt)
-    void renderPageComposite(page, scale)
+    const pixelRatio = Math.min(
+      MAX_THUMBNAIL_PIXEL_RATIO,
+      Math.max(1, window.devicePixelRatio || 1)
+    )
+    void renderPageComposite(page, displayScale * pixelRatio)
       .then((rendered) => {
         const canvas = canvasRef.current
-        if (!canvas || cancelled) return
+        if (!canvas || cancelled) {
+          rendered.width = 1
+          rendered.height = 1
+          return
+        }
         canvas.width = rendered.width
         canvas.height = rendered.height
-        canvas.getContext("2d")?.drawImage(rendered, 0, 0)
+        const context = canvas.getContext("2d")
+        if (context) {
+          context.imageSmoothingEnabled = true
+          context.imageSmoothingQuality = "high"
+          context.drawImage(rendered, 0, 0)
+        }
         rendered.width = 1
         rendered.height = 1
       })
@@ -142,9 +188,17 @@ function PageThumbnail({ page }: { page: EditorPage }) {
     return () => {
       cancelled = true
     }
-  }, [page])
+  }, [displayScale, page])
 
-  return <canvas ref={canvasRef} className="block h-auto max-h-40 max-w-full bg-paper" />
+  return (
+    <span ref={containerRef} className="flex w-full justify-center">
+      <canvas
+        ref={canvasRef}
+        className="block bg-paper"
+        style={{ width: displayWidth, height: displayHeight }}
+      />
+    </span>
+  )
 }
 
 function PageRail({ onDelete }: { onDelete: (pageId: string) => void }) {

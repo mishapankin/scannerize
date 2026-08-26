@@ -141,6 +141,11 @@ function drawLayer(context: CanvasRenderingContext2D, layer: EditorLayer) {
   context.restore()
 }
 
+function enableHighQualityImageSmoothing(context: CanvasRenderingContext2D) {
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = "high"
+}
+
 async function renderBackground(
   page: EditorPage,
   canvas: HTMLCanvasElement,
@@ -148,6 +153,7 @@ async function renderBackground(
 ) {
   const context = canvas.getContext("2d", { alpha: false })
   if (!context) throw new Error("Canvas is not available in this browser.")
+  enableHighQualityImageSmoothing(context)
 
   context.fillStyle =
     page.background.type === "blank" ? page.background.color : "#ffffff"
@@ -182,6 +188,7 @@ export async function renderPageComposite(page: EditorPage, scale: number) {
   await renderBackground(page, canvas, scale)
   const context = canvas.getContext("2d")
   if (!context) throw new Error("Canvas is not available in this browser.")
+  enableHighQualityImageSmoothing(context)
 
   context.save()
   context.scale(scale, scale)
