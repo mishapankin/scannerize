@@ -726,8 +726,8 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
               anchorFill={palette.paper}
               anchorStroke={palette.primary}
               borderStroke={palette.primary}
-              anchorSize={8 / viewport.scale}
-              borderStrokeWidth={1 / viewport.scale}
+              anchorSize={8}
+              borderStrokeWidth={1}
               boundBoxFunc={(oldBox, nextBox) =>
                 nextBox.width < 12 || nextBox.height < 12 ? oldBox : nextBox
               }
