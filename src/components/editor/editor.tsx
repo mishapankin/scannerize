@@ -8,6 +8,13 @@ import {
   useRef,
   useState,
 } from "react"
+import { DragDropProvider, type DragEndEvent } from "@dnd-kit/react"
+import { isSortable, useSortable } from "@dnd-kit/react/sortable"
+import {
+  KeyboardSensor,
+  PointerActivationConstraints,
+  PointerSensor,
+} from "@dnd-kit/dom"
 import {
   AlignCenterIcon,
   AlignLeftIcon,
@@ -108,6 +115,28 @@ const MAX_THUMBNAIL_WIDTH = 132
 const MAX_THUMBNAIL_HEIGHT = 160
 const MAX_THUMBNAIL_SCALE = 0.24
 const MAX_THUMBNAIL_PIXEL_RATIO = 2
+const SORTABLE_TRANSITION = {
+  duration: 220,
+  easing: "cubic-bezier(0.25, 1, 0.5, 1)",
+  idle: false,
+} as const
+const SORTABLE_SENSORS = [
+  PointerSensor.configure({
+    activationConstraints(event) {
+      if (event.pointerType === "touch") {
+        return [
+          new PointerActivationConstraints.Delay({
+            value: 180,
+            tolerance: 8,
+          }),
+        ]
+      }
+
+      return [new PointerActivationConstraints.Distance({ value: 5 })]
+    },
+  }),
+  KeyboardSensor,
+]
 
 function IconButton({ label, children, ...props }: IconButtonProps) {
   const button = (
@@ -201,15 +230,102 @@ function PageThumbnail({ page }: { page: EditorPage }) {
   )
 }
 
+function SortablePage({
+  page,
+  index,
+  selected,
+  onDelete,
+}: {
+  page: EditorPage
+  index: number
+  selected: boolean
+  onDelete: (pageId: string) => void
+}) {
+  const selectPage = useEditorStore((state) => state.selectPage)
+  const duplicatePage = useEditorStore((state) => state.duplicatePage)
+  const rotatePage = useEditorStore((state) => state.rotatePage)
+  const { ref, handleRef, isDragSource } = useSortable({
+    id: page.id,
+    index,
+    type: "page",
+    transition: SORTABLE_TRANSITION,
+  })
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger
+        ref={ref}
+        className={cn(
+          "sortable-item block rounded-lg",
+          isDragSource && "opacity-70"
+        )}
+      >
+        <button
+          ref={handleRef}
+          type="button"
+          onClick={() => selectPage(page.id)}
+          className={cn(
+            "group flex w-full touch-none cursor-grab flex-col gap-2 rounded-lg border p-2 text-left outline-none transition-colors active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring",
+            selected
+              ? "border-primary bg-sidebar-accent"
+              : "border-sidebar-border hover:bg-sidebar-accent/60"
+          )}
+        >
+          <span className="flex items-center gap-1.5 text-xs font-medium">
+            <GripVerticalIcon className="size-3 text-muted-foreground" />
+            {index + 1}
+            <span className="ml-auto truncate text-muted-foreground">
+              {Math.round(page.widthPt)} × {Math.round(page.heightPt)}
+            </span>
+          </span>
+          <span className="flex min-h-28 items-center justify-center overflow-hidden rounded-md border bg-workspace p-2">
+            <PageThumbnail page={page} />
+          </span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuGroup>
+          <ContextMenuItem onClick={() => duplicatePage(page.id)}>
+            <CopyIcon /> Duplicate
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => rotatePage(page.id)}>
+            <RotateCwIcon /> Rotate
+          </ContextMenuItem>
+        </ContextMenuGroup>
+        <ContextMenuSeparator />
+        <ContextMenuGroup>
+          <ContextMenuItem
+            variant="destructive"
+            onClick={() => onDelete(page.id)}
+          >
+            <Trash2Icon /> Delete
+          </ContextMenuItem>
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+}
+
 function PageRail({ onDelete }: { onDelete: (pageId: string) => void }) {
   const document = useEditorStore((state) => state.document)
   const selectedPageId = useEditorStore((state) => state.selectedPageId)
-  const selectPage = useEditorStore((state) => state.selectPage)
   const addBlankPage = useEditorStore((state) => state.addBlankPage)
-  const duplicatePage = useEditorStore((state) => state.duplicatePage)
-  const rotatePage = useEditorStore((state) => state.rotatePage)
   const movePage = useEditorStore((state) => state.movePage)
-  const draggedPage = useRef<string | null>(null)
+  const pages = document?.pages ?? []
+
+  function handlePageDragEnd(event: DragEndEvent) {
+    const { source } = event.operation
+    if (
+      event.canceled ||
+      !isSortable(source) ||
+      source.initialIndex === source.index
+    ) {
+      return
+    }
+
+    const target = pages[source.index]
+    if (target) movePage(String(source.id), target.id)
+  }
 
   return (
     <aside className="flex h-full min-w-0 flex-col bg-sidebar">
@@ -218,65 +334,22 @@ function PageRail({ onDelete }: { onDelete: (pageId: string) => void }) {
         <span className="text-muted-foreground">{document?.pages.length ?? 0}</span>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-2 p-3">
-          {document?.pages.map((page, index) => (
-            <ContextMenu key={page.id}>
-              <ContextMenuTrigger>
-                <button
-                  type="button"
-                  draggable
-                  onDragStart={() => {
-                    draggedPage.current = page.id
-                  }}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => {
-                    if (draggedPage.current) {
-                      movePage(draggedPage.current, page.id)
-                    }
-                    draggedPage.current = null
-                  }}
-                  onClick={() => selectPage(page.id)}
-                  className={cn(
-                    "group flex w-full flex-col gap-2 rounded-lg border p-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                    selectedPageId === page.id
-                      ? "border-primary bg-sidebar-accent"
-                      : "border-sidebar-border hover:bg-sidebar-accent/60"
-                  )}
-                >
-                  <span className="flex items-center gap-1.5 text-xs font-medium">
-                    <GripVerticalIcon className="size-3 text-muted-foreground" />
-                    {index + 1}
-                    <span className="ml-auto truncate text-muted-foreground">
-                      {Math.round(page.widthPt)} × {Math.round(page.heightPt)}
-                    </span>
-                  </span>
-                  <span className="flex min-h-28 items-center justify-center overflow-hidden rounded-md border bg-workspace p-2">
-                    <PageThumbnail page={page} />
-                  </span>
-                </button>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuGroup>
-                  <ContextMenuItem onClick={() => duplicatePage(page.id)}>
-                    <CopyIcon /> Duplicate
-                  </ContextMenuItem>
-                  <ContextMenuItem onClick={() => rotatePage(page.id)}>
-                    <RotateCwIcon /> Rotate
-                  </ContextMenuItem>
-                </ContextMenuGroup>
-                <ContextMenuSeparator />
-                <ContextMenuGroup>
-                  <ContextMenuItem
-                    variant="destructive"
-                    onClick={() => onDelete(page.id)}
-                  >
-                    <Trash2Icon /> Delete
-                  </ContextMenuItem>
-                </ContextMenuGroup>
-              </ContextMenuContent>
-            </ContextMenu>
-          ))}
-        </div>
+        <DragDropProvider
+          sensors={SORTABLE_SENSORS}
+          onDragEnd={handlePageDragEnd}
+        >
+          <div className="flex flex-col gap-2 p-3">
+            {pages.map((page, index) => (
+              <SortablePage
+                key={page.id}
+                page={page}
+                index={index}
+                selected={selectedPageId === page.id}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        </DragDropProvider>
       </ScrollArea>
       <div className="border-t p-2">
         <Button variant="ghost" className="w-full" onClick={addBlankPage}>
@@ -288,36 +361,44 @@ function PageRail({ onDelete }: { onDelete: (pageId: string) => void }) {
   )
 }
 
-function LayerRow({ page, layer }: { page: EditorPage; layer: EditorLayer }) {
+function LayerRow({
+  page,
+  layer,
+  index,
+}: {
+  page: EditorPage
+  layer: EditorLayer
+  index: number
+}) {
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const selectLayer = useEditorStore((state) => state.selectLayer)
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
-  const moveLayer = useEditorStore((state) => state.moveLayer)
+  const { ref, handleRef, isDragSource } = useSortable({
+    id: layer.id,
+    index,
+    group: page.id,
+    type: "layer",
+    disabled: { draggable: layer.locked },
+    transition: SORTABLE_TRANSITION,
+  })
+
   return (
     <div
-      draggable={!layer.locked}
-      onDragStart={(event) => {
-        event.dataTransfer.setData("application/x-scannerize-layer", layer.id)
-        event.dataTransfer.effectAllowed = "move"
-      }}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => {
-        const draggedLayerId = event.dataTransfer.getData(
-          "application/x-scannerize-layer"
-        )
-        if (draggedLayerId) {
-          moveLayer(page.id, draggedLayerId, layer.id)
-        }
-      }}
+      ref={ref}
       className={cn(
-        "group flex h-9 items-center gap-1 border-b px-2 text-sm",
-        selectedLayerId === layer.id && "bg-accent"
+        "sortable-item group flex h-9 items-center gap-1 border-b px-2 text-sm",
+        selectedLayerId === layer.id && "bg-accent",
+        isDragSource && "opacity-70"
       )}
     >
       <button
+        ref={handleRef}
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        className={cn(
+          "flex min-w-0 flex-1 touch-none items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          layer.locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+        )}
         onClick={() => selectLayer(layer.id)}
       >
         <GripVerticalIcon className="size-3 text-muted-foreground" />
@@ -482,9 +563,26 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
 function LayersPanel({ page }: { page: EditorPage | null }) {
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
+  const moveLayer = useEditorStore((state) => state.moveLayer)
   const selectedLayer = page?.layers.find(
     (layer) => layer.id === selectedLayerId
   )
+  const layers = page ? [...page.layers].reverse() : []
+
+  function handleLayerDragEnd(event: DragEndEvent) {
+    const { source } = event.operation
+    if (
+      !page ||
+      event.canceled ||
+      !isSortable(source) ||
+      source.initialIndex === source.index
+    ) {
+      return
+    }
+
+    const target = layers[source.index]
+    if (target) moveLayer(page.id, String(source.id), target.id)
+  }
 
   return (
     <aside className="flex h-full min-w-0 flex-col bg-sidebar">
@@ -511,11 +609,21 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
           </Empty>
         ) : (
           <ScrollArea className="h-full">
-            <div className="flex flex-col-reverse">
-              {page.layers.map((layer) => (
-                <LayerRow key={layer.id} page={page} layer={layer} />
-              ))}
-            </div>
+            <DragDropProvider
+              sensors={SORTABLE_SENSORS}
+              onDragEnd={handleLayerDragEnd}
+            >
+              <div className="flex flex-col">
+                {layers.map((layer, index) => (
+                  <LayerRow
+                    key={layer.id}
+                    page={page}
+                    layer={layer}
+                    index={index}
+                  />
+                ))}
+              </div>
+            </DragDropProvider>
             <div className="flex h-9 items-center gap-2 border-b px-3 text-sm text-muted-foreground">
               <LockIcon className="size-3.5" /> Background
             </div>

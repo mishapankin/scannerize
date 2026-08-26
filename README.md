@@ -18,7 +18,7 @@ Imported PDF text, vectors, links, forms, and annotations are intentionally flat
 
 ## Interface
 
-The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows can be dragged to reorder them, and page actions are available from the thumbnail context menu. Select, pan, zoom, and fit controls sit directly on the workspace beneath the active page.
+The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows use animated sorting as they are dragged, support keyboard reordering from the focused row, and commit one undoable change when dropped. Page actions are available from the thumbnail context menu. Select, pan, zoom, and fit controls sit directly on the workspace beneath the active page.
 
 The interface uses shadcn/Base UI components installed through `shadcn add` and Lucide icons. It avoids dashboard-style cards: bordered containers are reserved for functional items such as page thumbnails, the paper surface, dialogs, and menus.
 
@@ -36,6 +36,7 @@ Next.js uses `output: "export"` and produces a deployable `out/` directory. Ther
 
 - `pdfjs-dist` loads local PDF bytes and rasterizes page backgrounds in a locally emitted worker.
 - `react-konva` and `konva` render and transform editable overlay layers.
+- `@dnd-kit/react` provides animated pointer, touch, and keyboard sorting for pages and layers.
 - `zustand`, `immer`, and `zundo` hold the serializable document model and history.
 - `pdf-lib` creates the final PDF from page-sized flattened canvases.
 - Workbox generates `out/sw.js` after the static build and precaches the application shell.
