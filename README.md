@@ -9,7 +9,7 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 - Edit text content, font, size, weight, alignment, color, opacity, and line height.
 - Add blank A4 pages; duplicate, rotate, reorder, and delete pages.
 - Undo and redo document edits.
-- Navigate with native trackpad panning and pointer-centered pinch zoom, plus Space/middle-button panning and fit-to-page controls.
+- Switch between Select (`V`), Pan (`H`), and drag-to-zoom (`Z`) tools. Trackpad panning, pinch zoom, Space-drag, and middle-button panning remain available while selecting.
 - Export at 96, 150, or 300 DPI as a flattened PDF.
 - Install and reopen the application offline after its first GitHub Pages visit.
 
@@ -17,7 +17,7 @@ Imported PDF text, vectors, links, forms, and annotations are intentionally flat
 
 ## Interface
 
-The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows can be dragged to reorder them, and page actions are available from the thumbnail context menu. Pan, zoom, and fit controls sit directly on the workspace beneath the active page.
+The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows can be dragged to reorder them, and page actions are available from the thumbnail context menu. Select, pan, zoom, and fit controls sit directly on the workspace beneath the active page.
 
 The interface uses shadcn/Base UI components installed through `shadcn add` and Lucide icons. It avoids dashboard-style cards: bordered containers are reserved for functional items such as page thumbnails, the paper surface, dialogs, and menus.
 

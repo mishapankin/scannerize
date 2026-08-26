@@ -11,7 +11,9 @@ import Konva from "konva"
 import {
   HandIcon,
   MinusIcon,
+  MousePointer2Icon,
   PlusIcon,
+  SearchIcon,
 } from "lucide-react"
 import {
   Group,
@@ -24,6 +26,11 @@ import {
 } from "react-konva"
 
 import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group"
 import {
   Tooltip,
   TooltipContent,
@@ -52,11 +59,19 @@ type PinchStart = {
   scale: number
 }
 
+type CanvasTool = "select" | "pan" | "zoom"
+
+type PointerGestureStart = {
+  pointer: { x: number; y: number }
+  viewport: Viewport
+}
+
 const WORKSPACE_INSET = 40
 const MIN_VISIBLE_PAPER = 48
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const MAX_WHEEL_DELTA = 100
+const ZOOM_DRAG_DISTANCE = 160
 const PREVIEW_RENDER_DELAY = 120
 
 function useDebouncedValue<T>(value: T, delay: number) {
@@ -241,6 +256,29 @@ function CanvasControl({
   )
 }
 
+function CanvasToolControl({
+  label,
+  value,
+  children,
+}: {
+  label: string
+  value: CanvasTool
+  children: React.ReactNode
+}) {
+  const item = (
+    <ToggleGroupItem value={value} aria-label={label}>
+      {children}
+    </ToggleGroupItem>
+  )
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={item} />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 function getTouchCenter(touches: TouchList) {
   return {
     x: (touches[0].clientX + touches[1].clientX) / 2,
@@ -264,10 +302,12 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
     pointer: { x: number; y: number }
     viewport: Viewport
   } | null>(null)
+  const zoomDragStartRef = useRef<PointerGestureStart | null>(null)
   const pinchStartRef = useRef<PinchStart | null>(null)
-  const [panMode, setPanMode] = useState(false)
+  const [tool, setTool] = useState<CanvasTool>("select")
   const [spacePressed, setSpacePressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
+  const [isZoomDragging, setIsZoomDragging] = useState(false)
 
   const fitScale = useMemo(
     () =>
@@ -345,6 +385,59 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
     [clampViewport, fitScale]
   )
 
+  const updatePan = useCallback(
+    (pointer: { x: number; y: number }) => {
+      const start = panStartRef.current
+      if (!start) return
+      setViewport(
+        clampViewport({
+          ...start.viewport,
+          x: start.viewport.x + pointer.x - start.pointer.x,
+          y: start.viewport.y + pointer.y - start.pointer.y,
+        })
+      )
+    },
+    [clampViewport]
+  )
+
+  const updateZoomDrag = useCallback(
+    (pointer: { x: number; y: number }) => {
+      const start = zoomDragStartRef.current
+      if (!start) return
+
+      const startZoom = start.viewport.scale / fitScale
+      const factor = Math.pow(
+        2,
+        (start.pointer.y - pointer.y) / ZOOM_DRAG_DISTANCE
+      )
+      const nextZoom = Math.min(
+        MAX_ZOOM,
+        Math.max(MIN_ZOOM, startZoom * factor)
+      )
+      const nextScale = fitScale * nextZoom
+      const pagePoint = {
+        x: (start.pointer.x - start.viewport.x) / start.viewport.scale,
+        y: (start.pointer.y - start.viewport.y) / start.viewport.scale,
+      }
+
+      setViewport(
+        clampViewport({
+          x: start.pointer.x - pagePoint.x * nextScale,
+          y: start.pointer.y - pagePoint.y * nextScale,
+          scale: nextScale,
+        })
+      )
+    },
+    [clampViewport, fitScale]
+  )
+
+  const endPointerGesture = useCallback(() => {
+    panStartRef.current = null
+    zoomDragStartRef.current = null
+    setIsPanning(false)
+    setIsZoomDragging(false)
+  }, [])
+
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) =>
       target instanceof HTMLElement &&
@@ -355,6 +448,13 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
       if (event.code === "Space") {
         event.preventDefault()
         setSpacePressed(true)
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+        const key = event.key.toLowerCase()
+        if (key === "v" || key === "h" || key === "z") {
+          event.preventDefault()
+          setTool(key === "v" ? "select" : key === "h" ? "pan" : "zoom")
+        }
       }
       if (event.key === "+" || event.key === "=") {
         event.preventDefault()
@@ -374,8 +474,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
     }
     const onBlur = () => {
       setSpacePressed(false)
-      setIsPanning(false)
-      panStartRef.current = null
+      endPointerGesture()
     }
 
     window.addEventListener("keydown", onKeyDown)
@@ -386,7 +485,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
       window.removeEventListener("keyup", onKeyUp)
       window.removeEventListener("blur", onBlur)
     }
-  }, [height, resetView, width, zoomAt])
+  }, [endPointerGesture, height, resetView, width, zoomAt])
 
   const requestedRenderScale = Math.min(
     3,
@@ -411,7 +510,8 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
   }, [page.layers, selectedLayerId])
 
   const selectedLayer = page.layers.find((layer) => layer.id === selectedLayerId)
-  const navigationActive = panMode || spacePressed || isPanning
+  const objectInteractionEnabled =
+    tool === "select" && !spacePressed && !isPanning && !isZoomDragging
   const zoomPercent = Math.round((viewport.scale / fitScale) * 100)
 
   const palette = useMemo(() => {
@@ -428,9 +528,13 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
       className={
         isPanning
           ? "relative size-full cursor-grabbing overflow-hidden"
-          : navigationActive
-            ? "relative size-full cursor-grab overflow-hidden"
-            : "relative size-full cursor-default overflow-hidden"
+          : isZoomDragging
+            ? "relative size-full cursor-ns-resize overflow-hidden"
+            : tool === "pan" || spacePressed
+              ? "relative size-full cursor-grab overflow-hidden"
+              : tool === "zoom"
+                ? "relative size-full cursor-zoom-in overflow-hidden"
+                : "relative size-full cursor-default overflow-hidden"
       }
       style={{ touchAction: "none" }}
     >
@@ -462,7 +566,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
           const pointer = stage?.getPointerPosition()
           const wantsPan =
             event.evt.button === 1 ||
-            (event.evt.button === 0 && (panMode || spacePressed))
+            (event.evt.button === 0 && (tool === "pan" || spacePressed))
 
           if (wantsPan && pointer) {
             event.evt.preventDefault()
@@ -470,40 +574,48 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
             setIsPanning(true)
             return
           }
-          if (event.target === stage) selectLayer(null)
+          if (event.evt.button === 0 && tool === "zoom" && pointer) {
+            event.evt.preventDefault()
+            zoomDragStartRef.current = { pointer, viewport }
+            setIsZoomDragging(true)
+            return
+          }
+          if (tool === "select" && event.target === stage) selectLayer(null)
         }}
         onMouseMove={(event) => {
           const pointer = event.target.getStage()?.getPointerPosition()
-          const start = panStartRef.current
-          if (!pointer || !start) return
-          setViewport(
-            clampViewport({
-              ...start.viewport,
-              x: start.viewport.x + pointer.x - start.pointer.x,
-              y: start.viewport.y + pointer.y - start.pointer.y,
-            })
-          )
+          if (!pointer) return
+          if (panStartRef.current) updatePan(pointer)
+          else if (zoomDragStartRef.current) updateZoomDrag(pointer)
         }}
-        onMouseUp={() => {
-          panStartRef.current = null
-          setIsPanning(false)
-        }}
-        onMouseLeave={() => {
-          panStartRef.current = null
-          setIsPanning(false)
-        }}
+        onMouseUp={endPointerGesture}
+        onMouseLeave={endPointerGesture}
         onTouchStart={(event) => {
           const touches = event.evt.touches
+          const stage = event.target.getStage()
+
+          if (touches.length === 1 && tool !== "select") {
+            const pointer = stage?.getPointerPosition()
+            if (!pointer) return
+            event.evt.preventDefault()
+            event.target.stopDrag()
+            if (tool === "pan") {
+              panStartRef.current = { pointer, viewport }
+              setIsPanning(true)
+            } else {
+              zoomDragStartRef.current = { pointer, viewport }
+              setIsZoomDragging(true)
+            }
+            return
+          }
           if (touches.length !== 2) {
-            if (event.target === event.target.getStage()) selectLayer(null)
+            if (tool === "select" && event.target === stage) selectLayer(null)
             return
           }
           event.evt.preventDefault()
           event.target.stopDrag()
-          const stageRect = event.target
-            .getStage()
-            ?.container()
-            .getBoundingClientRect()
+          endPointerGesture()
+          const stageRect = stage?.container().getBoundingClientRect()
           if (!stageRect) return
           const center = getTouchCenter(touches)
           const stageCenter = {
@@ -523,6 +635,14 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
         onTouchMove={(event) => {
           const touches = event.evt.touches
           const start = pinchStartRef.current
+          if (touches.length === 1 && !start) {
+            const pointer = event.target.getStage()?.getPointerPosition()
+            if (!pointer) return
+            event.evt.preventDefault()
+            if (panStartRef.current) updatePan(pointer)
+            else if (zoomDragStartRef.current) updateZoomDrag(pointer)
+            return
+          }
           if (touches.length !== 2 || !start) return
           event.evt.preventDefault()
           const stageRect = event.target
@@ -552,7 +672,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
         onTouchEnd={(event) => {
           if (event.evt.touches.length < 2) {
             pinchStartRef.current = null
-            setIsPanning(false)
+            endPointerGesture()
           }
         }}
       >
@@ -579,7 +699,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
             />
           </Group>
         </KonvaLayer>
-        <KonvaLayer listening={!navigationActive}>
+        <KonvaLayer listening={objectInteractionEnabled}>
           <Group
             x={viewport.x}
             y={viewport.y}
@@ -616,14 +736,26 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
       </Stage>
 
       <div className="canvas-controls" role="toolbar" aria-label="Canvas view">
-        <CanvasControl
-          label="Pan · Trackpad, Space, or middle mouse"
-          aria-pressed={panMode}
-          variant={panMode ? "secondary" : "ghost"}
-          onClick={() => setPanMode((active) => !active)}
+        <ToggleGroup
+          value={[tool]}
+          onValueChange={(value) => {
+            const nextTool = value[0] as CanvasTool | undefined
+            if (nextTool) setTool(nextTool)
+          }}
+          spacing={0}
+          aria-label="Canvas tools"
         >
-          <HandIcon />
-        </CanvasControl>
+          <CanvasToolControl label="Select · V" value="select">
+            <MousePointer2Icon />
+          </CanvasToolControl>
+          <CanvasToolControl label="Pan · H" value="pan">
+            <HandIcon />
+          </CanvasToolControl>
+          <CanvasToolControl label="Zoom · Z" value="zoom">
+            <SearchIcon />
+          </CanvasToolControl>
+        </ToggleGroup>
+        <Separator orientation="vertical" />
         <CanvasControl
           label="Zoom out · −"
           disabled={zoomPercent <= MIN_ZOOM * 100}
