@@ -720,6 +720,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
             <Transformer
               ref={transformerRef}
               rotateEnabled
+              shouldOverdrawWholeArea
               keepRatio={selectedLayer?.type === "image"}
               flipEnabled={false}
               anchorFill={palette.paper}
