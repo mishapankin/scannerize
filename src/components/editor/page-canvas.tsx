@@ -39,6 +39,7 @@ import {
 import { getImageAsset } from "@/lib/asset-registry"
 import { useEditorStore } from "@/lib/editor-store"
 import { renderPageBackground } from "@/lib/pdf-engine"
+import { getTextResizeMode } from "@/lib/text-layout"
 import type { EditorLayer, EditorPage } from "@/types/editor"
 
 type PageCanvasProps = {
@@ -73,6 +74,17 @@ const MAX_ZOOM = 8
 const MAX_WHEEL_DELTA = 100
 const ZOOM_DRAG_DISTANCE = 160
 const PREVIEW_RENDER_DELAY = 120
+const ALL_RESIZE_ANCHORS = [
+  "top-left",
+  "top-center",
+  "top-right",
+  "middle-right",
+  "bottom-right",
+  "bottom-center",
+  "bottom-left",
+  "middle-left",
+]
+const HORIZONTAL_RESIZE_ANCHORS = ["middle-left", "middle-right"]
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value)
@@ -162,12 +174,17 @@ function CanvasLayerNode({
 }) {
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const selectLayer = useEditorStore((state) => state.selectLayer)
+  const textResizeMode = layer.type === "text" ? getTextResizeMode(layer) : null
+  const textDimensions =
+    layer.type !== "text" || textResizeMode === "auto-width"
+      ? {}
+      : textResizeMode === "auto-height"
+        ? { width: layer.width }
+        : { width: layer.width, height: layer.height }
   const common = {
     id: layer.id,
     x: layer.x,
     y: layer.y,
-    width: layer.width,
-    height: layer.height,
     rotation: layer.rotation,
     opacity: layer.opacity,
     visible: layer.visible,
@@ -186,12 +203,35 @@ function CanvasLayerNode({
         y: event.target.y(),
       })
     },
+    onTransform: (event: Konva.KonvaEventObject<Event>) => {
+      if (layer.type !== "text" || textResizeMode === "auto-width") return
+
+      const node = event.target as Konva.Text
+      const width = Math.max(12, node.width() * node.scaleX())
+      const height = Math.max(12, node.height() * node.scaleY())
+      node.scaleX(1)
+      node.scaleY(1)
+      node.width(width)
+      if (textResizeMode === "fixed") node.height(height)
+    },
     onTransformEnd: (event: Konva.KonvaEventObject<Event>) => {
       const node = event.target
       const scaleX = node.scaleX()
       const scaleY = node.scaleY()
       node.scaleX(1)
       node.scaleY(1)
+
+      if (layer.type === "text") {
+        updateLayer(page.id, layer.id, {
+          x: node.x(),
+          y: node.y(),
+          width: Math.max(12, node.width() * scaleX),
+          height: Math.max(12, node.height() * scaleY),
+          rotation: node.rotation(),
+        })
+        return
+      }
+
       updateLayer(page.id, layer.id, {
         x: node.x(),
         y: node.y(),
@@ -207,6 +247,8 @@ function CanvasLayerNode({
     return (
       <KonvaImage
         {...common}
+        width={layer.width}
+        height={layer.height}
         image={asset?.image}
         ref={(node) => registerRef(layer.id, node)}
       />
@@ -216,6 +258,7 @@ function CanvasLayerNode({
   return (
     <KonvaText
       {...common}
+      {...textDimensions}
       text={layer.value}
       fontFamily={layer.fontFamily}
       fontSize={layer.fontSize}
@@ -223,7 +266,7 @@ function CanvasLayerNode({
       fill={layer.fill}
       align={layer.align}
       lineHeight={layer.lineHeight}
-      wrap="word"
+      wrap={textResizeMode === "auto-width" ? "none" : "word"}
       verticalAlign="top"
       ref={(node) => registerRef(layer.id, node)}
     />
@@ -722,6 +765,16 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
               rotateEnabled
               shouldOverdrawWholeArea
               keepRatio={selectedLayer?.type === "image"}
+              enabledAnchors={
+                selectedLayer?.type === "image"
+                  ? ALL_RESIZE_ANCHORS
+                  : selectedLayer && getTextResizeMode(selectedLayer) === "fixed"
+                    ? ALL_RESIZE_ANCHORS
+                    : selectedLayer &&
+                        getTextResizeMode(selectedLayer) === "auto-height"
+                      ? HORIZONTAL_RESIZE_ANCHORS
+                      : []
+              }
               flipEnabled={false}
               anchorFill={palette.paper}
               anchorStroke={palette.primary}

@@ -94,6 +94,10 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group"
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -104,8 +108,14 @@ import {
   useEditorStore,
 } from "@/lib/editor-store"
 import { exportDocument, importPdfFile, renderPageComposite } from "@/lib/pdf-engine"
+import { getTextResizeMode } from "@/lib/text-layout"
 import { cn } from "@/lib/utils"
-import type { EditorLayer, EditorPage, TextLayer } from "@/types/editor"
+import type {
+  EditorLayer,
+  EditorPage,
+  TextLayer,
+  TextResizeMode,
+} from "@/types/editor"
 
 type IconButtonProps = ComponentProps<typeof Button> & {
   label: string
@@ -503,6 +513,44 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
                 />
               </Field>
             </div>
+            <Field>
+              <FieldLabel>Resize</FieldLabel>
+              <ToggleGroup
+                className="w-full"
+                variant="outline"
+                spacing={0}
+                value={[getTextResizeMode(layer)]}
+                onValueChange={(value) => {
+                  const resizeMode = value[0] as TextResizeMode | undefined
+                  if (resizeMode) {
+                    updateLayer(page.id, layer.id, { resizeMode })
+                  }
+                }}
+                aria-label="Text resize mode"
+              >
+                <ToggleGroupItem
+                  className="flex-1"
+                  value="auto-width"
+                  aria-label="Auto width"
+                >
+                  Width
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  className="flex-1"
+                  value="auto-height"
+                  aria-label="Auto height"
+                >
+                  Height
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  className="flex-1"
+                  value="fixed"
+                  aria-label="Fixed size"
+                >
+                  Fixed
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </Field>
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <Field>
                 <FieldLabel>Align</FieldLabel>
@@ -762,6 +810,7 @@ export default function Editor() {
       type: "text",
       name: "Text",
       value: "Text",
+      resizeMode: "auto-height",
       x: page.widthPt * 0.18,
       y: page.heightPt * 0.18,
       width: page.widthPt * 0.44,

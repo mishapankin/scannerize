@@ -4,6 +4,7 @@ import { temporal } from "zundo"
 import { create } from "zustand"
 import { immer } from "zustand/middleware/immer"
 
+import { measureTextLayer } from "@/lib/text-layout"
 import type {
   EditorDocument,
   EditorLayer,
@@ -186,6 +187,9 @@ export const useEditorStore = create<EditorState>()(
         set((state) => {
           const page = state.document?.pages.find((item) => item.id === pageId)
           if (!page) return
+          if (layer.type === "text") {
+            Object.assign(layer, measureTextLayer(layer))
+          }
           page.layers.push(layer)
           state.selectedLayerId = layer.id
         }),
@@ -196,6 +200,9 @@ export const useEditorStore = create<EditorState>()(
             ?.layers.find((item) => item.id === layerId)
           if (!layer) return
           Object.assign(layer, patch)
+          if (layer.type === "text") {
+            Object.assign(layer, measureTextLayer(layer))
+          }
         }),
       deleteLayer: (pageId, layerId) =>
         set((state) => {

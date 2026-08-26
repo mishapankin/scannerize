@@ -46,6 +46,10 @@ Scannerize is an offline-first, browser-only PDF finishing editor. Read `README.
 - Render thumbnails lazily and render the active page at viewport-appropriate resolution. Bound caches and explicitly release canvases, bitmaps, object URLs, and PDF resources.
 - All page operations must preserve mixed physical page sizes and stable layer coordinates.
 - Text fonts must be locally bundled and fully loaded before measuring or exporting text.
+- Preserve the three text-frame modes: auto width follows unwrapped content, auto
+  height wraps at a fixed width and follows content height, and fixed size clips
+  overflow. Resizing a text frame must change its bounds live without scaling its
+  glyphs, and canvas, thumbnail, and export layout rules must stay aligned.
 - Long imports and exports need progress, cancellation points, and actionable errors. Detect encrypted/corrupt PDFs and browser canvas/memory limits without crashing the editor.
 
 ## Verification

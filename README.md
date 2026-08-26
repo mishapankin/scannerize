@@ -6,7 +6,8 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 
 - Import a PDF or drop it onto the editor; dropping another PDF appends its pages.
 - Add, move, resize, rotate, reorder, hide, lock, duplicate, and delete image or text layers.
-- Edit text content, font, size, weight, alignment, color, opacity, and line height.
+- Edit text content, font, size, weight, alignment, color, opacity, line height,
+  and Figma-style auto-width, auto-height, or fixed-size frames.
 - Add blank A4 pages; duplicate, rotate, reorder, and delete pages.
 - Preview pages with device-pixel-aware thumbnails for sharp text and image edges.
 - Undo and redo document edits.

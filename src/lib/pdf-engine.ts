@@ -2,6 +2,7 @@ import { PDFDocument } from "pdf-lib"
 import type { PDFDocumentProxy } from "pdfjs-dist"
 
 import { getImageAsset } from "@/lib/asset-registry"
+import { getTextLines, getTextResizeMode } from "@/lib/text-layout"
 import type { EditorLayer, EditorPage } from "@/types/editor"
 
 type PdfSource = {
@@ -72,36 +73,6 @@ export async function clearPdfSources() {
   )
 }
 
-function wrapText(
-  context: CanvasRenderingContext2D,
-  value: string,
-  maxWidth: number
-) {
-  const lines: string[] = []
-
-  for (const paragraph of value.split("\n")) {
-    const words = paragraph.split(/\s+/).filter(Boolean)
-    if (words.length === 0) {
-      lines.push("")
-      continue
-    }
-
-    let line = words[0]
-    for (const word of words.slice(1)) {
-      const candidate = `${line} ${word}`
-      if (context.measureText(candidate).width <= maxWidth) {
-        line = candidate
-      } else {
-        lines.push(line)
-        line = word
-      }
-    }
-    lines.push(line)
-  }
-
-  return lines
-}
-
 function drawTextLayer(
   context: CanvasRenderingContext2D,
   layer: Extract<EditorLayer, { type: "text" }>
@@ -111,13 +82,19 @@ function drawTextLayer(
   context.textBaseline = "top"
   context.textAlign = layer.align
 
+  if (getTextResizeMode(layer) === "fixed") {
+    context.beginPath()
+    context.rect(0, 0, layer.width, layer.height)
+    context.clip()
+  }
+
   const anchorX =
     layer.align === "left" ? 0 : layer.align === "center" ? layer.width / 2 : layer.width
-  const lines = wrapText(context, layer.value, layer.width)
+  const lines = getTextLines(context, layer)
   const lineHeight = layer.fontSize * layer.lineHeight
 
   for (const [index, line] of lines.entries()) {
-    context.fillText(line, anchorX, index * lineHeight, layer.width)
+    context.fillText(line, anchorX, index * lineHeight)
   }
 }
 

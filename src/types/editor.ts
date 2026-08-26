@@ -27,9 +27,12 @@ export type ImageLayer = LayerBase & {
   assetId: string
 }
 
+export type TextResizeMode = "auto-width" | "auto-height" | "fixed"
+
 export type TextLayer = LayerBase & {
   type: "text"
   value: string
+  resizeMode: TextResizeMode
   fontFamily: "Manrope Variable" | "Source Serif 4 Variable"
   fontSize: number
   fontWeight: number
