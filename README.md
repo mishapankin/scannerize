@@ -26,7 +26,8 @@ The interface uses shadcn/Base UI components installed through `shadcn add` and 
 Visual rules:
 
 - Keep labels and helper copy short; do not stack redundant titles, tags, subtitles, or descriptions.
-- Use the neutral-plus-orange semantic palette defined in `src/app/globals.css`.
+- Use the dark graphite-plus-orange semantic palette defined in
+  `src/app/globals.css`; keep document paper white and visually dominant.
 - Do not add colorful gradients, decorative textures, glow effects, glassmorphism, or scattered shadows.
 - Use locally bundled proportional fonts; do not use monospaced fonts.
 - Prefer flat surfaces, borders, spacing, and contrast. The paper surface is the one elevated workspace element.
