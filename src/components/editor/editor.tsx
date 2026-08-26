@@ -31,8 +31,6 @@ import {
   Trash2Icon,
   Undo2Icon,
   UnlockIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
 } from "lucide-react"
 import { useStore } from "zustand"
 
@@ -500,11 +498,9 @@ function Workspace({ page }: { page: EditorPage | null }) {
   }, [])
 
   return (
-    <main ref={containerRef} className="workspace-grid relative h-full overflow-auto">
+    <main ref={containerRef} className="workspace-grid relative h-full overflow-hidden">
       {page ? (
-        <div className="flex min-h-full min-w-full items-center justify-center p-9">
-          <PageCanvas page={page} width={size.width} height={size.height} />
-        </div>
+        <PageCanvas page={page} width={size.width} height={size.height} />
       ) : (
         <Empty className="h-full rounded-none border-0">
           <EmptyMedia variant="icon">
@@ -522,13 +518,11 @@ function Workspace({ page }: { page: EditorPage | null }) {
 export default function Editor() {
   const document = useEditorStore((state) => state.document)
   const selectedPageId = useEditorStore((state) => state.selectedPageId)
-  const zoom = useEditorStore((state) => state.zoom)
   const setDocument = useEditorStore((state) => state.setDocument)
   const appendPages = useEditorStore((state) => state.appendPages)
   const addBlankPage = useEditorStore((state) => state.addBlankPage)
   const addLayer = useEditorStore((state) => state.addLayer)
   const deletePage = useEditorStore((state) => state.deletePage)
-  const setZoom = useEditorStore((state) => state.setZoom)
   const selectedPage =
     document?.pages.find((page) => page.id === selectedPageId) ?? null
   const undo = useStore(useEditorStore.temporal, (state) => state.undo)
@@ -762,29 +756,6 @@ export default function Editor() {
               </span>
             </div>
           )}
-          <IconButton
-            label="Zoom out"
-            disabled={!selectedPage || zoom <= 0.25}
-            onClick={() => setZoom(zoom - 0.1)}
-          >
-            <ZoomOutIcon />
-          </IconButton>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!selectedPage}
-            onClick={() => setZoom(1)}
-            className="w-14"
-          >
-            {Math.round(zoom * 100)}%
-          </Button>
-          <IconButton
-            label="Zoom in"
-            disabled={!selectedPage || zoom >= 3}
-            onClick={() => setZoom(zoom + 0.1)}
-          >
-            <ZoomInIcon />
-          </IconButton>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={

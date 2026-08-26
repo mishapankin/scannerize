@@ -31,6 +31,7 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-workspace: var(--workspace);
+  --color-workspace-foreground: var(--workspace-foreground);
   --color-paper: var(--paper);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -63,7 +64,9 @@
   --sidebar-accent: oklch(0.91 0.025 68);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
-  --workspace: oklch(0.31 0.012 71);
+  --workspace: oklch(0.205 0.01 71);
+  --workspace-foreground: oklch(0.96 0.006 83);
+  --paper-shadow: oklch(0.08 0 0 / 0.24);
   --paper: oklch(0.99 0.006 84);
   --radius: 0.45rem;
 }
@@ -108,12 +111,11 @@
   }
 
   .workspace-grid {
-    background-color: var(--workspace);
+    @apply bg-workspace text-workspace-foreground;
   }
 
-  .paper-surface {
-    @apply shrink-0 overflow-hidden bg-paper ring-1 ring-black/15;
-    box-shadow: 0 12px 28px oklch(0.08 0 0 / 0.22);
+  .canvas-controls {
+    @apply absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background/95 p-1 text-foreground;
   }
 
   .mobile-blocker {

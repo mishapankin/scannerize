@@ -41,12 +41,10 @@ type EditorState = {
   document: EditorDocument | null
   selectedPageId: string | null
   selectedLayerId: string | null
-  zoom: number
   setDocument: (document: EditorDocument) => void
   resetDocument: () => void
   selectPage: (pageId: string) => void
   selectLayer: (layerId: string | null) => void
-  setZoom: (zoom: number) => void
   appendPages: (pages: EditorPage[]) => void
   addBlankPage: () => void
   deletePage: (pageId: string) => void
@@ -72,20 +70,17 @@ export const useEditorStore = create<EditorState>()(
       document: null,
       selectedPageId: null,
       selectedLayerId: null,
-      zoom: 1,
       setDocument: (document) =>
         set((state) => {
           state.document = document
           state.selectedPageId = document.pages[0]?.id ?? null
           state.selectedLayerId = null
-          state.zoom = 1
         }),
       resetDocument: () =>
         set((state) => {
           state.document = null
           state.selectedPageId = null
           state.selectedLayerId = null
-          state.zoom = 1
         }),
       selectPage: (pageId) =>
         set((state) => {
@@ -95,10 +90,6 @@ export const useEditorStore = create<EditorState>()(
       selectLayer: (layerId) =>
         set((state) => {
           state.selectedLayerId = layerId
-        }),
-      setZoom: (zoom) =>
-        set((state) => {
-          state.zoom = Math.min(3, Math.max(0.25, zoom))
         }),
       appendPages: (pages) =>
         set((state) => {
