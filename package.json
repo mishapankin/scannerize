@@ -24,6 +24,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.8",
+    "react-colorful": "^5.8.0",
     "react-dom": "19.2.8",
     "react-konva": "^19.2.5",
     "react-resizable-panels": "^4.12.3",

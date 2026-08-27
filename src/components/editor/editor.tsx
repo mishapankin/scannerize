@@ -40,6 +40,7 @@ import {
 import { useStore } from "zustand"
 
 import { PageCanvas } from "@/components/editor/page-canvas"
+import { ColorPicker } from "@/components/editor/color-picker"
 import { ExportDialog } from "@/components/editor/export-dialog"
 import {
   AlertDialog,
@@ -458,6 +459,31 @@ function LayerRow({
 
 function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer }) {
   const updateLayer = useEditorStore((state) => state.updateLayer)
+  const colorGestureActiveRef = useRef(false)
+
+  useEffect(
+    () => () => {
+      if (colorGestureActiveRef.current) {
+        useEditorStore.temporal.getState().resume()
+      }
+    },
+    []
+  )
+
+  const updateColor = (fill: string) => {
+    updateLayer(page.id, layer.id, { fill })
+
+    if (!colorGestureActiveRef.current) {
+      colorGestureActiveRef.current = true
+      useEditorStore.temporal.getState().pause()
+    }
+  }
+
+  const finishColorGesture = () => {
+    if (!colorGestureActiveRef.current) return
+    colorGestureActiveRef.current = false
+    useEditorStore.temporal.getState().resume()
+  }
 
   return (
     <div className="p-3">
@@ -596,15 +622,12 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
               </Field>
               <Field>
                 <FieldLabel htmlFor="text-color">Color</FieldLabel>
-                <Input
+                <ColorPicker
                   id="text-color"
-                  type="color"
-                  className="w-12"
-                  style={{ backgroundColor: layer.fill }}
                   value={layer.fill}
-                  onChange={(event) =>
-                    updateLayer(page.id, layer.id, { fill: event.target.value })
-                  }
+                  label="Text color"
+                  onValueChange={updateColor}
+                  onValueChangeEnd={finishColorGesture}
                 />
               </Field>
             </div>

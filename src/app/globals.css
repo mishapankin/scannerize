@@ -90,6 +90,29 @@
   }
 }
 
+.scannerize-color-picker.react-colorful {
+  width: 100%;
+  height: 180px;
+}
+
+.scannerize-color-picker .react-colorful__saturation {
+  margin-bottom: 8px;
+  border-bottom: 0;
+  border-radius: var(--radius-md);
+}
+
+.scannerize-color-picker .react-colorful__hue {
+  height: 12px;
+  border-radius: 999px;
+}
+
+.scannerize-color-picker .react-colorful__pointer {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--foreground);
+  box-shadow: 0 0 0 1px var(--background);
+}
+
 @layer components {
   .editor-shell {
     @apply relative flex h-dvh min-h-0 flex-col overflow-hidden bg-background;
