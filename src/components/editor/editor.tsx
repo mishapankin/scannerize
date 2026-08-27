@@ -599,7 +599,8 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
                 <Input
                   id="text-color"
                   type="color"
-                  className="w-12 px-1"
+                  className="w-12"
+                  style={{ backgroundColor: layer.fill }}
                   value={layer.fill}
                   onChange={(event) =>
                     updateLayer(page.id, layer.id, { fill: event.target.value })
