@@ -103,10 +103,6 @@
     @apply flex min-w-36 items-center gap-2 px-1 text-sm font-semibold tracking-tight;
   }
 
-  .brand svg {
-    @apply size-5 text-primary;
-  }
-
   .panel-heading {
     @apply flex h-10 shrink-0 items-center justify-between border-b px-3 text-xs font-semibold uppercase tracking-[0.08em];
   }

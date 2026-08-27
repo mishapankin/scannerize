@@ -309,7 +309,11 @@ function CanvasToolControl({
   children: React.ReactNode
 }) {
   const item = (
-    <ToggleGroupItem value={value} aria-label={label}>
+    <ToggleGroupItem
+      value={value}
+      aria-label={label}
+      className="aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary"
+    >
       {children}
     </ToggleGroupItem>
   )

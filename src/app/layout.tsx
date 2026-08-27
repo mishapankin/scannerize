@@ -9,6 +9,13 @@ export const metadata: Metadata = {
   title: "Scannerize",
   description: "Offline PDF finishing in your browser.",
   manifest: `${basePath}/manifest.webmanifest`,
+  icons: {
+    icon: {
+      url: `${basePath}/favicon.png`,
+      type: "image/png",
+      sizes: "512x512",
+    },
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

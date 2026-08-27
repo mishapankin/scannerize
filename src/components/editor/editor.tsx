@@ -641,7 +641,7 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
       <div className="min-h-0 flex-1">
         {!page ? null : page.layers.length === 0 ? (
           <Empty className="h-full rounded-none border-0">
-            <EmptyMedia variant="icon">
+            <EmptyMedia>
               <Layers3Icon />
             </EmptyMedia>
             <EmptyHeader>
@@ -706,7 +706,7 @@ function Workspace({ page }: { page: EditorPage | null }) {
         <PageCanvas page={page} width={size.width} height={size.height} />
       ) : (
         <Empty className="h-full rounded-none border-0">
-          <EmptyMedia variant="icon">
+          <EmptyMedia className="text-foreground [&_svg]:size-12">
             <ScanLineIcon />
           </EmptyMedia>
           <EmptyHeader>
@@ -900,10 +900,7 @@ export default function Editor() {
       onDrop={handleDrop}
     >
       <header className="toolbar">
-        <div className="brand" aria-label="Scannerize">
-          <ScanLineIcon />
-          <span>Scannerize</span>
-        </div>
+        <div className="brand">Scannerize</div>
         <Separator orientation="vertical" className="h-5" />
         <Button
           variant="outline"
