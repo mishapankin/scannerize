@@ -2,6 +2,11 @@ import { PDFDocument } from "pdf-lib"
 import type { PDFDocumentProxy } from "pdfjs-dist"
 
 import { getImageAsset } from "@/lib/asset-registry"
+import {
+  buildExportPlan,
+  type ExportPagePlan,
+  type ExportSettings,
+} from "@/lib/export-plan"
 import { getTextLines, getTextResizeMode } from "@/lib/text-layout"
 import type { EditorLayer, EditorPage } from "@/types/editor"
 
@@ -203,34 +208,91 @@ function canvasToBytes(
   })
 }
 
+async function renderExportPage(plan: ExportPagePlan, dpi: number) {
+  const scale = dpi / 72
+  const fit = Math.min(
+    plan.widthPt / plan.page.widthPt,
+    plan.heightPt / plan.page.heightPt
+  )
+  const composite = await renderPageComposite(plan.page, scale * fit)
+
+  if (!plan.resized) return composite
+
+  const canvas = document.createElement("canvas")
+  canvas.width = Math.max(1, Math.ceil(plan.widthPt * scale))
+  canvas.height = Math.max(1, Math.ceil(plan.heightPt * scale))
+  const context = canvas.getContext("2d", { alpha: false })
+  if (!context) throw new Error("Canvas is not available in this browser.")
+  enableHighQualityImageSmoothing(context)
+  context.fillStyle = "#ffffff"
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.drawImage(
+    composite,
+    (canvas.width - composite.width) / 2,
+    (canvas.height - composite.height) / 2
+  )
+  composite.width = 1
+  composite.height = 1
+  return canvas
+}
+
+async function appendPreservedPage(
+  output: PDFDocument,
+  plan: ExportPagePlan,
+  sourceDocuments: Map<string, PDFDocument>
+) {
+  if (plan.page.background.type !== "pdf") {
+    throw new Error("Only imported PDF pages can be preserved.")
+  }
+
+  const { sourceId, pageNumber } = plan.page.background
+  const source = pdfSources.get(sourceId)
+  if (!source) throw new Error("The PDF source is no longer available.")
+
+  let sourceDocument = sourceDocuments.get(sourceId)
+  if (!sourceDocument) {
+    sourceDocument = await PDFDocument.load(source.bytes.slice())
+    sourceDocuments.set(sourceId, sourceDocument)
+  }
+
+  const [copiedPage] = await output.copyPages(sourceDocument, [pageNumber - 1])
+  output.addPage(copiedPage)
+}
+
 export async function exportDocument(
   name: string,
   pages: EditorPage[],
-  dpi: number,
+  settings: ExportSettings,
   onProgress: (current: number, total: number) => void
 ) {
   const output = await PDFDocument.create()
   output.setTitle(name)
   output.setProducer("Scannerize")
+  const plan = buildExportPlan(pages, settings)
+  const sourceDocuments = new Map<string, PDFDocument>()
 
-  for (const [index, page] of pages.entries()) {
-    onProgress(index, pages.length)
-    const scale = dpi / 72
-    const canvas = await renderPageComposite(page, scale)
+  for (const [index, pagePlan] of plan.pages.entries()) {
+    onProgress(index, plan.pages.length)
+    if (pagePlan.preserveOriginal) {
+      await appendPreservedPage(output, pagePlan, sourceDocuments)
+      continue
+    }
+
+    const canvas = await renderExportPage(pagePlan, settings.dpi)
     const bytes = await canvasToBytes(canvas, "image/jpeg", 0.92)
     const image = await output.embedJpg(bytes)
-    const pdfPage = output.addPage([page.widthPt, page.heightPt])
+    const pdfPage = output.addPage([pagePlan.widthPt, pagePlan.heightPt])
     pdfPage.drawImage(image, {
       x: 0,
       y: 0,
-      width: page.widthPt,
-      height: page.heightPt,
+      width: pagePlan.widthPt,
+      height: pagePlan.heightPt,
     })
     canvas.width = 1
     canvas.height = 1
   }
 
-  onProgress(pages.length, pages.length)
+  onProgress(plan.pages.length, plan.pages.length)
   const bytes = await output.save()
   const blob = new Blob([bytes.slice().buffer], { type: "application/pdf" })
   const url = URL.createObjectURL(blob)

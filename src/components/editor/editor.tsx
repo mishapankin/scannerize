@@ -19,9 +19,7 @@ import {
   AlignCenterIcon,
   AlignLeftIcon,
   AlignRightIcon,
-  ChevronDownIcon,
   CopyIcon,
-  DownloadIcon,
   EyeIcon,
   EyeOffIcon,
   FileImageIcon,
@@ -42,6 +40,7 @@ import {
 import { useStore } from "zustand"
 
 import { PageCanvas } from "@/components/editor/page-canvas"
+import { ExportDialog } from "@/components/editor/export-dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,13 +60,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   Empty,
   EmptyHeader,
@@ -108,6 +100,7 @@ import {
   useEditorStore,
 } from "@/lib/editor-store"
 import { exportDocument, importPdfFile, renderPageComposite } from "@/lib/pdf-engine"
+import type { ExportSettings } from "@/lib/export-plan"
 import { getTextResizeMode } from "@/lib/text-layout"
 import { cn } from "@/lib/utils"
 import type {
@@ -861,14 +854,17 @@ export default function Editor() {
     }
   }
 
-  async function runExport(dpi: number) {
+  async function runExport(settings: ExportSettings) {
     if (!document || document.pages.length === 0) return
     setError(null)
     setExportState({ current: 0, total: document.pages.length })
     try {
       await window.document.fonts.ready
-      await exportDocument(document.name, document.pages, dpi, (current, total) =>
-        setExportState({ current, total })
+      await exportDocument(
+        document.name,
+        document.pages,
+        settings,
+        (current, total) => setExportState({ current, total })
       )
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Export failed.")
@@ -967,33 +963,12 @@ export default function Editor() {
               </span>
             </div>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  size="sm"
-                  disabled={!document?.pages.length || Boolean(exportState)}
-                />
-              }
-            >
-              <DownloadIcon data-icon="inline-start" />
-              Export
-              <ChevronDownIcon data-icon="inline-end" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => void runExport(96)}>
-                  Screen · 96 DPI
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void runExport(150)}>
-                  Standard · 150 DPI
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void runExport(300)}>
-                  Print · 300 DPI
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ExportDialog
+            document={document}
+            selectedPageId={selectedPageId}
+            disabled={!document?.pages.length || Boolean(exportState)}
+            onExport={(settings) => void runExport(settings)}
+          />
         </div>
       </header>
 

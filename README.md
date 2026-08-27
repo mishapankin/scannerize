@@ -1,6 +1,6 @@
 # Scannerize
 
-Scannerize is a browser-only editor for final-stage PDF changes. It imports local PDFs as page backgrounds, places editable image and text layers over them, manages pages in a filmstrip, and downloads a flattened PDF. Document bytes never leave the browser.
+Scannerize is a browser-only editor for final-stage PDF changes. It imports local PDFs as page backgrounds, places editable image and text layers over them, manages pages in a filmstrip, and downloads a finished PDF. Document bytes never leave the browser.
 
 ## Features
 
@@ -12,10 +12,13 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 - Preview pages with device-pixel-aware thumbnails for sharp text and image edges.
 - Undo and redo document edits.
 - Switch between Select (`V`), Pan (`H`), and drag-to-zoom (`Z`) tools. Trackpad panning, pinch zoom, Space-drag, and middle-button panning remain available while selecting.
-- Export at 96, 150, or 300 DPI as a flattened PDF.
+- Export at 96, 150, or 300 DPI, preserve untouched source pages, and keep,
+  limit, or normalize physical page sizes.
 - Install and reopen the application offline after its first GitHub Pages visit.
 
-Imported PDF text, vectors, links, forms, and annotations are intentionally flattened during export; they are not edited as native PDF objects.
+Imported PDF text, vectors, links, forms, and annotations are not editable.
+Untouched pages can be copied into the result without flattening; edited or
+resized pages are intentionally flattened during export.
 
 ## Interface
 
@@ -46,7 +49,12 @@ Next.js uses `output: "export"` and produces a deployable `out/` directory. Ther
 
 Page and layer geometry is stored in PDF points, independent of screen zoom and export DPI. PDF.js proxies, decoded images, object URLs, and canvases stay in disposable runtime registries rather than editor history.
 
-Export is sequential: each source page is rasterized at the chosen DPI, visible overlays are drawn from the document model, the result is embedded into a same-size `pdf-lib` page, and the temporary canvas is released before the next page.
+Export is sequential. Untouched, unscaled PDF pages can be copied directly into
+the result. Other pages are rasterized at the chosen DPI, visible overlays are
+drawn from the document model, and the composite is fitted without cropping to
+its planned output size before being embedded with `pdf-lib`. Automatic sizing
+uses the median dimensions of the document's dominant page-size group and can
+shrink oversized outliers without changing normal or smaller pages.
 
 ## Offline and GitHub Pages
 
@@ -67,6 +75,7 @@ The included GitHub Actions workflow derives that repository base path and deplo
 ```bash
 pnpm install
 pnpm dev
+pnpm test
 pnpm lint
 pnpm build
 ```
