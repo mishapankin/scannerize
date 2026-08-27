@@ -270,14 +270,28 @@ function SortablePage({
           className={cn(
             "group flex w-full touch-none cursor-grab flex-col gap-2 rounded-lg border p-2 text-left outline-none transition-colors active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring",
             selected
-              ? "border-primary bg-sidebar-accent"
+              ? "border-primary bg-sidebar-accent text-sidebar-accent-foreground"
               : "border-sidebar-border hover:bg-sidebar-accent/60"
           )}
         >
           <span className="flex items-center gap-1.5 text-xs font-medium">
-            <GripVerticalIcon className="size-3 text-muted-foreground" />
+            <GripVerticalIcon
+              className={cn(
+                "size-3",
+                selected
+                  ? "text-sidebar-accent-foreground"
+                  : "text-muted-foreground"
+              )}
+            />
             {index + 1}
-            <span className="ml-auto truncate text-muted-foreground">
+            <span
+              className={cn(
+                "ml-auto truncate",
+                selected
+                  ? "text-sidebar-accent-foreground"
+                  : "text-muted-foreground"
+              )}
+            >
               {Math.round(page.widthPt)} × {Math.round(page.heightPt)}
             </span>
           </span>
@@ -377,6 +391,7 @@ function LayerRow({
   const selectLayer = useEditorStore((state) => state.selectLayer)
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
+  const selected = selectedLayerId === layer.id
   const { ref, handleRef, isDragSource } = useSortable({
     id: layer.id,
     index,
@@ -391,7 +406,7 @@ function LayerRow({
       ref={ref}
       className={cn(
         "sortable-item group flex h-9 items-center gap-1 border-b px-2 text-sm",
-        selectedLayerId === layer.id && "bg-accent",
+        selected && "bg-accent text-accent-foreground",
         isDragSource && "opacity-70"
       )}
     >
@@ -404,7 +419,12 @@ function LayerRow({
         )}
         onClick={() => selectLayer(layer.id)}
       >
-        <GripVerticalIcon className="size-3 text-muted-foreground" />
+        <GripVerticalIcon
+          className={cn(
+            "size-3",
+            selected ? "text-accent-foreground" : "text-muted-foreground"
+          )}
+        />
         {layer.type === "image" ? (
           <FileImageIcon className="size-4" />
         ) : (
@@ -547,7 +567,16 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <Field>
                 <FieldLabel>Align</FieldLabel>
-                <div className="flex gap-1">
+                <ToggleGroup
+                  variant="outline"
+                  spacing={0}
+                  value={[layer.align]}
+                  onValueChange={(value) => {
+                    const align = value[0] as TextLayer["align"] | undefined
+                    if (align) updateLayer(page.id, layer.id, { align })
+                  }}
+                  aria-label="Text alignment"
+                >
                   {(
                     [
                       ["left", AlignLeftIcon],
@@ -555,17 +584,15 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
                       ["right", AlignRightIcon],
                     ] as const
                   ).map(([align, Icon]) => (
-                    <Button
+                    <ToggleGroupItem
                       key={align}
-                      size="icon-sm"
-                      variant={layer.align === align ? "secondary" : "outline"}
+                      value={align}
                       aria-label={`Align ${align}`}
-                      onClick={() => updateLayer(page.id, layer.id, { align })}
                     >
                       <Icon />
-                    </Button>
+                    </ToggleGroupItem>
                   ))}
-                </div>
+                </ToggleGroup>
               </Field>
               <Field>
                 <FieldLabel htmlFor="text-color">Color</FieldLabel>
