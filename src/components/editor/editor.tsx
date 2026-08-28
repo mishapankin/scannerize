@@ -28,6 +28,7 @@ import {
   ImagePlusIcon,
   Layers3Icon,
   LockIcon,
+  PencilIcon,
   PlusIcon,
   Redo2Icon,
   RotateCwIcon,
@@ -392,15 +393,50 @@ function LayerRow({
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
+  const [renaming, setRenaming] = useState(false)
+  const [nameDraft, setNameDraft] = useState(layer.name)
+  const cancelRenameRef = useRef(false)
+  const renameInputRef = useRef<HTMLInputElement>(null)
   const selected = selectedLayerId === layer.id
   const { ref, handleRef, isDragSource } = useSortable({
     id: layer.id,
     index,
     group: page.id,
     type: "layer",
-    disabled: { draggable: layer.locked },
+    disabled: { draggable: layer.locked || renaming },
     transition: SORTABLE_TRANSITION,
   })
+
+  useEffect(() => {
+    if (!renaming) return
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    })
+
+    return () => window.cancelAnimationFrame(animationFrame)
+  }, [renaming])
+
+  const startRenaming = () => {
+    selectLayer(layer.id)
+    cancelRenameRef.current = false
+    setNameDraft(layer.name)
+    setRenaming(true)
+  }
+
+  const finishRenaming = () => {
+    const cancelled = cancelRenameRef.current
+    cancelRenameRef.current = false
+    setRenaming(false)
+
+    if (cancelled) return
+
+    const name = nameDraft.trim()
+    if (name && name !== layer.name) {
+      updateLayer(page.id, layer.id, { name })
+    }
+  }
 
   return (
     <ContextMenu>
@@ -413,28 +449,71 @@ function LayerRow({
         )}
         onContextMenu={() => selectLayer(layer.id)}
       >
-        <button
-          ref={handleRef}
-          type="button"
-          className={cn(
-            "flex min-w-0 flex-1 touch-none items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            layer.locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"
-          )}
-          onClick={() => selectLayer(layer.id)}
-        >
-          <GripVerticalIcon
-            className={cn(
-              "size-3",
-              selected ? "text-accent-foreground" : "text-muted-foreground"
+        {renaming ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <GripVerticalIcon
+              className={cn(
+                "size-3",
+                selected ? "text-accent-foreground" : "text-muted-foreground"
+              )}
+            />
+            {layer.type === "image" ? (
+              <FileImageIcon className="size-4" />
+            ) : (
+              <TextCursorInputIcon className="size-4" />
             )}
-          />
-          {layer.type === "image" ? (
-            <FileImageIcon className="size-4" />
-          ) : (
-            <TextCursorInputIcon className="size-4" />
-          )}
-          <span className="truncate">{layer.name}</span>
-        </button>
+            <Input
+              ref={renameInputRef}
+              value={nameDraft}
+              aria-label="Layer name"
+              className="h-7 min-w-0 flex-1 bg-secondary text-secondary-foreground"
+              onChange={(event) => setNameDraft(event.target.value)}
+              onBlur={finishRenaming}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  event.currentTarget.blur()
+                }
+
+                if (event.key === "Escape") {
+                  event.preventDefault()
+                  cancelRenameRef.current = true
+                  event.currentTarget.blur()
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            ref={handleRef}
+            type="button"
+            className={cn(
+              "flex min-w-0 flex-1 touch-none items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              layer.locked
+                ? "cursor-default"
+                : "cursor-grab active:cursor-grabbing"
+            )}
+            onClick={() => selectLayer(layer.id)}
+            onDoubleClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              startRenaming()
+            }}
+          >
+            <GripVerticalIcon
+              className={cn(
+                "size-3",
+                selected ? "text-accent-foreground" : "text-muted-foreground"
+              )}
+            />
+            {layer.type === "image" ? (
+              <FileImageIcon className="size-4" />
+            ) : (
+              <TextCursorInputIcon className="size-4" />
+            )}
+            <span className="truncate">{layer.name}</span>
+          </button>
+        )}
         <IconButton
           label={layer.visible ? "Hide layer" : "Show layer"}
           onClick={() =>
@@ -446,6 +525,9 @@ function LayerRow({
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuGroup>
+          <ContextMenuItem onClick={startRenaming}>
+            <PencilIcon /> Rename
+          </ContextMenuItem>
           <ContextMenuItem
             onClick={() => duplicateLayer(page.id, layer.id)}
           >
@@ -497,17 +579,6 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
   return (
     <div className="p-3">
       <FieldGroup className="gap-4">
-        <Field>
-          <FieldLabel htmlFor="layer-name">Name</FieldLabel>
-          <Input
-            id="layer-name"
-            value={layer.name}
-            onChange={(event) =>
-              updateLayer(page.id, layer.id, { name: event.target.value })
-            }
-          />
-        </Field>
-
         {layer.type === "text" && (
           <>
             <Field>
