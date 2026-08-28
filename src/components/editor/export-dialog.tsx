@@ -52,6 +52,8 @@ type ExportDialogProps = {
   document: EditorDocument | null
   selectedPageId: string | null
   disabled?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   onExport: (settings: ExportSettings) => void
 }
 
@@ -106,9 +108,16 @@ export function ExportDialog({
   document,
   selectedPageId,
   disabled,
+  open: controlledOpen,
+  onOpenChange,
   onExport,
 }: ExportDialogProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (nextOpen: boolean) => {
+    setInternalOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }
   const [dpi, setDpi] = useState<ExportDpi>(300)
   const [preserveUntouched, setPreserveUntouched] = useState(true)
   const [pageSizeMode, setPageSizeMode] =

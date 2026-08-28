@@ -119,11 +119,11 @@
   }
 
   .toolbar {
-    @apply flex h-12 shrink-0 items-center gap-1.5 border-b bg-background px-2;
+    @apply relative flex h-11 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-2;
   }
 
   .brand {
-    @apply flex min-w-36 items-center gap-2 px-1 text-sm font-semibold tracking-tight;
+    @apply flex shrink-0 items-center px-1 text-sm font-semibold tracking-tight;
   }
 
   .panel-heading {

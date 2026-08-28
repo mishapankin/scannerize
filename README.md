@@ -24,6 +24,10 @@ resized pages are intentionally flattened during export.
 
 The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows use animated sorting as they are dragged, support keyboard reordering from the focused row, and commit one undoable change when dropped. Page actions are available from the thumbnail context menu. Select, pan, zoom, and fit controls sit directly on the workspace beneath the active page.
 
+The top application bar uses compact File, Edit, Insert, and Page menus. The
+document name stays centered, while the Scannerize brand and menus sit on the
+left and history controls with the primary Export action remain on the right.
+
 The interface uses shadcn/Base UI components installed through `shadcn add` and Lucide icons. It avoids dashboard-style cards: bordered containers are reserved for functional items such as page thumbnails, the paper surface, dialogs, and menus.
 
 Visual rules:

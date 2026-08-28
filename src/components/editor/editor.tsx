@@ -20,6 +20,7 @@ import {
   AlignLeftIcon,
   AlignRightIcon,
   CopyIcon,
+  DownloadIcon,
   EyeIcon,
   EyeOffIcon,
   FileImageIcon,
@@ -69,6 +70,16 @@ import {
 } from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Menubar,
+  MenubarContent,
+  MenubarGroup,
+  MenubarItem,
+  MenubarMenu,
+  MenubarSeparator,
+  MenubarShortcut,
+  MenubarTrigger,
+} from "@/components/ui/menubar"
 import { Progress } from "@/components/ui/progress"
 import {
   ResizableHandle,
@@ -84,7 +95,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import {
   ToggleGroup,
@@ -860,13 +870,21 @@ function Workspace({ page }: { page: EditorPage | null }) {
 export default function Editor() {
   const document = useEditorStore((state) => state.document)
   const selectedPageId = useEditorStore((state) => state.selectedPageId)
+  const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const setDocument = useEditorStore((state) => state.setDocument)
   const appendPages = useEditorStore((state) => state.appendPages)
   const addBlankPage = useEditorStore((state) => state.addBlankPage)
   const addLayer = useEditorStore((state) => state.addLayer)
   const deletePage = useEditorStore((state) => state.deletePage)
+  const duplicatePage = useEditorStore((state) => state.duplicatePage)
+  const rotatePage = useEditorStore((state) => state.rotatePage)
+  const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
+  const deleteLayer = useEditorStore((state) => state.deleteLayer)
   const selectedPage =
     document?.pages.find((page) => page.id === selectedPageId) ?? null
+  const hasSelectedLayer = Boolean(
+    selectedPage?.layers.some((layer) => layer.id === selectedLayerId)
+  )
   const undo = useStore(useEditorStore.temporal, (state) => state.undo)
   const redo = useStore(useEditorStore.temporal, (state) => state.redo)
   const canUndo = useStore(
@@ -883,6 +901,7 @@ export default function Editor() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deletePageId, setDeletePageId] = useState<string | null>(null)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportState, setExportState] = useState<{
     current: number
     total: number
@@ -893,15 +912,33 @@ export default function Editor() {
       const target = event.target as HTMLElement
       if (target.matches("input, textarea, select, [contenteditable=true]")) return
       const command = event.metaKey || event.ctrlKey
-      if (command && event.key.toLowerCase() === "z") {
+      if (!command) return
+
+      const key = event.key.toLowerCase()
+      if (key === "z") {
         event.preventDefault()
         if (event.shiftKey) redo()
         else undo()
       }
+
+      if (key === "o") {
+        event.preventDefault()
+        if (!busy) {
+          const input = event.shiftKey ? appendInputRef : pdfInputRef
+          input.current?.click()
+        }
+      }
+
+      if (key === "e") {
+        event.preventDefault()
+        if (document?.pages.length && !exportState) {
+          setExportDialogOpen(true)
+        }
+      }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [redo, undo])
+  }, [busy, document?.pages.length, exportState, redo, undo])
 
   async function openPdf(file: File, append = false) {
     setBusy(true)
@@ -1039,30 +1076,150 @@ export default function Editor() {
       onDrop={handleDrop}
     >
       <header className="toolbar">
-        <div className="brand">Scannerize</div>
-        <Separator orientation="vertical" className="h-5" />
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => pdfInputRef.current?.click()}
-        >
-          <FilePlus2Icon data-icon="inline-start" />
-          Open
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => imageInputRef.current?.click()}
-        >
-          <ImagePlusIcon data-icon="inline-start" />
-          Image
-        </Button>
-        <Button variant="ghost" size="sm" onClick={addText}>
-          <TextCursorInputIcon data-icon="inline-start" />
-          Text
-        </Button>
+        <div className="brand mr-3">Scannerize</div>
+        <Menubar aria-label="Application menu">
+          <MenubarMenu>
+            <MenubarTrigger>File</MenubarTrigger>
+            <MenubarContent>
+              <MenubarGroup>
+                <MenubarItem
+                  disabled={busy}
+                  onClick={() => pdfInputRef.current?.click()}
+                >
+                  <FilePlus2Icon /> Open PDF…
+                  <MenubarShortcut>⌘O</MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={busy || !document}
+                  onClick={() => appendInputRef.current?.click()}
+                >
+                  <PlusIcon /> Append PDF…
+                  <MenubarShortcut>⇧⌘O</MenubarShortcut>
+                </MenubarItem>
+              </MenubarGroup>
+              <MenubarSeparator />
+              <MenubarGroup>
+                <MenubarItem
+                  disabled={!document?.pages.length || Boolean(exportState)}
+                  onClick={() => setExportDialogOpen(true)}
+                >
+                  <DownloadIcon /> Export PDF…
+                  <MenubarShortcut>⌘E</MenubarShortcut>
+                </MenubarItem>
+              </MenubarGroup>
+            </MenubarContent>
+          </MenubarMenu>
+
+          <MenubarMenu>
+            <MenubarTrigger>Edit</MenubarTrigger>
+            <MenubarContent>
+              <MenubarGroup>
+                <MenubarItem disabled={!canUndo} onClick={() => undo()}>
+                  <Undo2Icon /> Undo
+                  <MenubarShortcut>⌘Z</MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem disabled={!canRedo} onClick={() => redo()}>
+                  <Redo2Icon /> Redo
+                  <MenubarShortcut>⇧⌘Z</MenubarShortcut>
+                </MenubarItem>
+              </MenubarGroup>
+              <MenubarSeparator />
+              <MenubarGroup>
+                <MenubarItem
+                  disabled={!hasSelectedLayer}
+                  onClick={() => {
+                    if (selectedPage && selectedLayerId) {
+                      duplicateLayer(selectedPage.id, selectedLayerId)
+                    }
+                  }}
+                >
+                  <CopyIcon /> Duplicate layer
+                </MenubarItem>
+                <MenubarItem
+                  variant="destructive"
+                  disabled={!hasSelectedLayer}
+                  onClick={() => {
+                    if (selectedPage && selectedLayerId) {
+                      deleteLayer(selectedPage.id, selectedLayerId)
+                    }
+                  }}
+                >
+                  <Trash2Icon /> Delete layer
+                </MenubarItem>
+              </MenubarGroup>
+            </MenubarContent>
+          </MenubarMenu>
+
+          <MenubarMenu>
+            <MenubarTrigger>Insert</MenubarTrigger>
+            <MenubarContent>
+              <MenubarGroup>
+                <MenubarItem
+                  disabled={busy}
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <ImagePlusIcon /> Image…
+                </MenubarItem>
+                <MenubarItem onClick={addText}>
+                  <TextCursorInputIcon /> Text
+                </MenubarItem>
+              </MenubarGroup>
+              <MenubarSeparator />
+              <MenubarGroup>
+                <MenubarItem onClick={addBlankPage}>
+                  <PlusIcon /> Blank page
+                </MenubarItem>
+                <MenubarItem
+                  disabled={busy}
+                  onClick={() => appendInputRef.current?.click()}
+                >
+                  <FilePlus2Icon /> PDF pages…
+                </MenubarItem>
+              </MenubarGroup>
+            </MenubarContent>
+          </MenubarMenu>
+
+          <MenubarMenu>
+            <MenubarTrigger>Page</MenubarTrigger>
+            <MenubarContent>
+              <MenubarGroup>
+                <MenubarItem
+                  disabled={!selectedPageId}
+                  onClick={() => {
+                    if (selectedPageId) duplicatePage(selectedPageId)
+                  }}
+                >
+                  <CopyIcon /> Duplicate
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!selectedPageId}
+                  onClick={() => {
+                    if (selectedPageId) rotatePage(selectedPageId)
+                  }}
+                >
+                  <RotateCwIcon /> Rotate clockwise
+                </MenubarItem>
+              </MenubarGroup>
+              <MenubarSeparator />
+              <MenubarGroup>
+                <MenubarItem
+                  variant="destructive"
+                  disabled={!selectedPageId}
+                  onClick={() => {
+                    if (selectedPageId) setDeletePageId(selectedPageId)
+                  }}
+                >
+                  <Trash2Icon /> Delete
+                </MenubarItem>
+              </MenubarGroup>
+            </MenubarContent>
+          </MenubarMenu>
+        </Menubar>
+
+        <span className="pointer-events-none absolute left-1/2 max-w-72 -translate-x-1/2 truncate text-sm font-medium">
+          {document?.name ?? "Untitled"}
+        </span>
+
         <div className="ml-auto flex items-center gap-1">
           {error && (
             <span className="max-w-64 truncate text-xs text-destructive" role="alert">
@@ -1084,7 +1241,6 @@ export default function Editor() {
               </span>
             </div>
           )}
-          <Separator orientation="vertical" className="mx-1 h-5" />
           <IconButton
             label="Undo"
             disabled={!canUndo}
@@ -1103,6 +1259,8 @@ export default function Editor() {
             document={document}
             selectedPageId={selectedPageId}
             disabled={!document?.pages.length || Boolean(exportState)}
+            open={exportDialogOpen}
+            onOpenChange={setExportDialogOpen}
             onExport={(settings) => void runExport(settings)}
           />
         </div>
