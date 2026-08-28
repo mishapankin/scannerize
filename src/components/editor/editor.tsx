@@ -676,8 +676,8 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
     if (target) moveLayer(page.id, String(source.id), target.id)
   }
 
-  return (
-    <aside className="flex h-full min-w-0 flex-col bg-sidebar">
+  const layerList = (
+    <div className="flex h-full min-h-0 flex-col">
       <div className="panel-heading">
         <span>Layers</span>
         {page && selectedLayer && (
@@ -722,13 +722,32 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
           </ScrollArea>
         )}
       </div>
-      {page && selectedLayer && (
-        <>
-          <Separator />
-          <div className="max-h-[48%] overflow-y-auto">
-            <LayerProperties page={page} layer={selectedLayer} />
-          </div>
-        </>
+    </div>
+  )
+
+  return (
+    <aside className="flex h-full min-w-0 flex-col bg-sidebar">
+      {page && selectedLayer ? (
+        <ResizablePanelGroup orientation="vertical">
+          <ResizablePanel
+            id="layer-properties"
+            defaultSize="48%"
+            minSize={160}
+          >
+            <div className="h-full overflow-y-auto">
+              <LayerProperties page={page} layer={selectedLayer} />
+            </div>
+          </ResizablePanel>
+          <ResizableHandle
+            className="cursor-row-resize"
+            aria-label="Resize properties and layers"
+          />
+          <ResizablePanel id="layer-list" minSize={96}>
+            {layerList}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        layerList
       )}
     </aside>
   )
