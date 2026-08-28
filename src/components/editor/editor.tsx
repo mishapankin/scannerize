@@ -35,7 +35,6 @@ import {
   TextCursorInputIcon,
   Trash2Icon,
   Undo2Icon,
-  UnlockIcon,
 } from "lucide-react"
 import { useStore } from "zustand"
 
@@ -391,6 +390,7 @@ function LayerRow({
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const selectLayer = useEditorStore((state) => state.selectLayer)
   const updateLayer = useEditorStore((state) => state.updateLayer)
+  const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
   const selected = selectedLayerId === layer.id
   const { ref, handleRef, isDragSource } = useSortable({
@@ -403,57 +403,66 @@ function LayerRow({
   })
 
   return (
-    <div
-      ref={ref}
-      className={cn(
-        "sortable-item group flex h-9 items-center gap-1 px-2 text-sm",
-        selected && "bg-accent text-accent-foreground",
-        isDragSource && "opacity-70"
-      )}
-    >
-      <button
-        ref={handleRef}
-        type="button"
+    <ContextMenu>
+      <ContextMenuTrigger
+        ref={ref}
         className={cn(
-          "flex min-w-0 flex-1 touch-none items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          layer.locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+          "sortable-item group flex h-9 items-center gap-1 px-2 text-sm",
+          selected && "bg-accent text-accent-foreground",
+          isDragSource && "opacity-70"
         )}
-        onClick={() => selectLayer(layer.id)}
+        onContextMenu={() => selectLayer(layer.id)}
       >
-        <GripVerticalIcon
+        <button
+          ref={handleRef}
+          type="button"
           className={cn(
-            "size-3",
-            selected ? "text-accent-foreground" : "text-muted-foreground"
+            "flex min-w-0 flex-1 touch-none items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            layer.locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"
           )}
-        />
-        {layer.type === "image" ? (
-          <FileImageIcon className="size-4" />
-        ) : (
-          <TextCursorInputIcon className="size-4" />
-        )}
-        <span className="truncate">{layer.name}</span>
-      </button>
-      <IconButton
-        label={layer.visible ? "Hide layer" : "Show layer"}
-        onClick={() =>
-          updateLayer(page.id, layer.id, { visible: !layer.visible })
-        }
-      >
-        {layer.visible ? <EyeIcon /> : <EyeOffIcon />}
-      </IconButton>
-      <IconButton
-        label={layer.locked ? "Unlock layer" : "Lock layer"}
-        onClick={() => updateLayer(page.id, layer.id, { locked: !layer.locked })}
-      >
-        {layer.locked ? <LockIcon /> : <UnlockIcon />}
-      </IconButton>
-      <IconButton
-        label="Delete layer"
-        onClick={() => deleteLayer(page.id, layer.id)}
-      >
-        <Trash2Icon />
-      </IconButton>
-    </div>
+          onClick={() => selectLayer(layer.id)}
+        >
+          <GripVerticalIcon
+            className={cn(
+              "size-3",
+              selected ? "text-accent-foreground" : "text-muted-foreground"
+            )}
+          />
+          {layer.type === "image" ? (
+            <FileImageIcon className="size-4" />
+          ) : (
+            <TextCursorInputIcon className="size-4" />
+          )}
+          <span className="truncate">{layer.name}</span>
+        </button>
+        <IconButton
+          label={layer.visible ? "Hide layer" : "Show layer"}
+          onClick={() =>
+            updateLayer(page.id, layer.id, { visible: !layer.visible })
+          }
+        >
+          {layer.visible ? <EyeIcon /> : <EyeOffIcon />}
+        </IconButton>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuGroup>
+          <ContextMenuItem
+            onClick={() => duplicateLayer(page.id, layer.id)}
+          >
+            <CopyIcon /> Duplicate
+          </ContextMenuItem>
+        </ContextMenuGroup>
+        <ContextMenuSeparator />
+        <ContextMenuGroup>
+          <ContextMenuItem
+            variant="destructive"
+            onClick={() => deleteLayer(page.id, layer.id)}
+          >
+            <Trash2Icon /> Delete
+          </ContextMenuItem>
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -654,7 +663,6 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
 
 function LayersPanel({ page }: { page: EditorPage | null }) {
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
-  const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
   const moveLayer = useEditorStore((state) => state.moveLayer)
   const selectedLayer = page?.layers.find(
     (layer) => layer.id === selectedLayerId
@@ -680,14 +688,6 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="panel-heading">
         <span>Layers</span>
-        {page && selectedLayer && (
-          <IconButton
-            label="Duplicate layer"
-            onClick={() => duplicateLayer(page.id, selectedLayer.id)}
-          >
-            <CopyIcon />
-          </IconButton>
-        )}
       </div>
       <div className="min-h-0 flex-1">
         {!page ? null : page.layers.length === 0 ? (
