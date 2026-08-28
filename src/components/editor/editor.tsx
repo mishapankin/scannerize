@@ -268,10 +268,10 @@ function SortablePage({
           type="button"
           onClick={() => selectPage(page.id)}
           className={cn(
-            "group flex w-full touch-none cursor-grab flex-col gap-2 rounded-lg border p-2 text-left outline-none transition-colors active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring",
+            "group flex w-full touch-none cursor-grab flex-col gap-2 rounded-lg border bg-workspace p-2 text-left text-workspace-foreground outline-none transition-colors active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring",
             selected
-              ? "border-primary bg-sidebar-accent text-sidebar-accent-foreground"
-              : "border-sidebar-border hover:bg-sidebar-accent/60"
+              ? "border-primary"
+              : "border-sidebar-border hover:border-muted-foreground"
           )}
         >
           <span className="flex items-center gap-1.5 text-xs font-medium">
@@ -295,7 +295,7 @@ function SortablePage({
               {Math.round(page.widthPt)} × {Math.round(page.heightPt)}
             </span>
           </span>
-          <span className="flex min-h-28 items-center justify-center overflow-hidden rounded-md border bg-workspace p-2">
+          <span className="flex min-h-28 items-center justify-center overflow-hidden rounded-md p-2">
             <PageThumbnail page={page} />
           </span>
         </button>
