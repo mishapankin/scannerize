@@ -406,7 +406,7 @@ function LayerRow({
     <div
       ref={ref}
       className={cn(
-        "sortable-item group flex h-9 items-center gap-1 border-b px-2 text-sm",
+        "sortable-item group flex h-9 items-center gap-1 px-2 text-sm",
         selected && "bg-accent text-accent-foreground",
         isDragSource && "opacity-70"
       )}
@@ -716,7 +716,7 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
                 ))}
               </div>
             </DragDropProvider>
-            <div className="flex h-9 items-center gap-2 border-b px-3 text-sm text-muted-foreground">
+            <div className="flex h-9 items-center gap-2 px-3 text-sm text-muted-foreground">
               <LockIcon className="size-3.5" /> Background
             </div>
           </ScrollArea>
@@ -727,28 +727,26 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
 
   return (
     <aside className="flex h-full min-w-0 flex-col bg-sidebar">
-      {page && selectedLayer ? (
-        <ResizablePanelGroup orientation="vertical">
-          <ResizablePanel
-            id="layer-properties"
-            defaultSize="48%"
-            minSize={160}
-          >
-            <div className="h-full overflow-y-auto">
+      <ResizablePanelGroup orientation="vertical">
+        <ResizablePanel
+          id="layer-properties"
+          defaultSize="48%"
+          minSize={160}
+        >
+          <div className="h-full overflow-y-auto">
+            {page && selectedLayer && (
               <LayerProperties page={page} layer={selectedLayer} />
-            </div>
-          </ResizablePanel>
-          <ResizableHandle
-            className="cursor-row-resize"
-            aria-label="Resize properties and layers"
-          />
-          <ResizablePanel id="layer-list" minSize={96}>
-            {layerList}
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      ) : (
-        layerList
-      )}
+            )}
+          </div>
+        </ResizablePanel>
+        <ResizableHandle
+          className="cursor-row-resize"
+          aria-label="Resize properties and layers"
+        />
+        <ResizablePanel id="layer-list" minSize={96}>
+          {layerList}
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </aside>
   )
 }
@@ -994,21 +992,6 @@ export default function Editor() {
           <TextCursorInputIcon data-icon="inline-start" />
           Text
         </Button>
-        <Separator orientation="vertical" className="h-5" />
-        <IconButton
-          label="Undo"
-          disabled={!canUndo}
-          onClick={() => undo()}
-        >
-          <Undo2Icon />
-        </IconButton>
-        <IconButton
-          label="Redo"
-          disabled={!canRedo}
-          onClick={() => redo()}
-        >
-          <Redo2Icon />
-        </IconButton>
         <div className="ml-auto flex items-center gap-1">
           {error && (
             <span className="max-w-64 truncate text-xs text-destructive" role="alert">
@@ -1030,6 +1013,21 @@ export default function Editor() {
               </span>
             </div>
           )}
+          <Separator orientation="vertical" className="mx-1 h-5" />
+          <IconButton
+            label="Undo"
+            disabled={!canUndo}
+            onClick={() => undo()}
+          >
+            <Undo2Icon />
+          </IconButton>
+          <IconButton
+            label="Redo"
+            disabled={!canRedo}
+            onClick={() => redo()}
+          >
+            <Redo2Icon />
+          </IconButton>
           <ExportDialog
             document={document}
             selectedPageId={selectedPageId}

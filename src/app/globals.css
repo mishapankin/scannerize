@@ -127,7 +127,7 @@
   }
 
   .panel-heading {
-    @apply flex h-10 shrink-0 items-center justify-between border-b px-3 text-xs font-semibold uppercase tracking-[0.08em];
+    @apply flex h-10 shrink-0 items-center justify-between px-3 text-xs font-semibold uppercase tracking-[0.08em];
   }
 
   .workspace-grid {
