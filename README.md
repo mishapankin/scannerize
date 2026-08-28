@@ -11,6 +11,8 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 - Add blank A4 pages; duplicate, rotate, reorder, and delete pages.
 - Preview pages with device-pixel-aware thumbnails for sharp text and image edges.
 - Undo and redo document edits.
+- Use platform-aware application shortcuts: menus show Command on macOS and
+  Control on Windows and Linux from the same shortcut definitions.
 - Switch between Select (`V`), Pan (`H`), and drag-to-zoom (`Z`) tools. Trackpad panning, pinch zoom, Space-drag, and middle-button panning remain available while selecting.
 - Export at 96, 150, or 300 DPI, preserve untouched source pages, and keep,
   limit, or normalize physical page sizes.
@@ -46,6 +48,8 @@ Next.js uses `output: "export"` and produces a deployable `out/` directory. Ther
 - `pdfjs-dist` loads local PDF bytes and rasterizes page backgrounds in a locally emitted worker.
 - `react-konva` and `konva` render and transform editable overlay layers.
 - `@dnd-kit/react` provides animated pointer, touch, and keyboard sorting for pages and layers.
+- `@tanstack/react-hotkeys` registers application commands and formats their
+  platform-correct menu shortcuts.
 - `zustand`, `immer`, and `zundo` hold the serializable document model and history.
 - `pdf-lib` creates the final PDF from page-sized flattened canvases.
 - Workbox generates `out/sw.js` after the static build and precaches the application shell.

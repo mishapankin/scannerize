@@ -15,6 +15,7 @@ import {
   PointerActivationConstraints,
   PointerSensor,
 } from "@dnd-kit/dom"
+import { useHotkeys } from "@tanstack/react-hotkeys"
 import {
   AlignCenterIcon,
   AlignLeftIcon,
@@ -110,6 +111,10 @@ import {
   clearEditorHistory,
   useEditorStore,
 } from "@/lib/editor-store"
+import {
+  EDITOR_SHORTCUTS,
+  formatEditorShortcut,
+} from "@/lib/editor-shortcuts"
 import { exportDocument, importPdfFile, renderPageComposite } from "@/lib/pdf-engine"
 import type { ExportSettings } from "@/lib/export-plan"
 import { getTextResizeMode } from "@/lib/text-layout"
@@ -907,38 +912,50 @@ export default function Editor() {
     total: number
   } | null>(null)
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement
-      if (target.matches("input, textarea, select, [contenteditable=true]")) return
-      const command = event.metaKey || event.ctrlKey
-      if (!command) return
+  const commandShortcutsEnabled = !exportDialogOpen && !deletePageId
 
-      const key = event.key.toLowerCase()
-      if (key === "z") {
-        event.preventDefault()
-        if (event.shiftKey) redo()
-        else undo()
-      }
-
-      if (key === "o") {
-        event.preventDefault()
-        if (!busy) {
-          const input = event.shiftKey ? appendInputRef : pdfInputRef
-          input.current?.click()
-        }
-      }
-
-      if (key === "e") {
-        event.preventDefault()
-        if (document?.pages.length && !exportState) {
-          setExportDialogOpen(true)
-        }
-      }
+  useHotkeys(
+    [
+      {
+        hotkey: EDITOR_SHORTCUTS.openPdf,
+        callback: () => pdfInputRef.current?.click(),
+        options: { enabled: commandShortcutsEnabled && !busy },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.appendPdf,
+        callback: () => appendInputRef.current?.click(),
+        options: {
+          enabled: commandShortcutsEnabled && !busy && Boolean(document),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.exportPdf,
+        callback: () => setExportDialogOpen(true),
+        options: {
+          enabled:
+            commandShortcutsEnabled &&
+            Boolean(document?.pages.length) &&
+            !exportState,
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.undo,
+        callback: () => undo(),
+        options: { enabled: commandShortcutsEnabled && canUndo },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.redo,
+        callback: () => redo(),
+        options: { enabled: commandShortcutsEnabled && canRedo },
+      },
+    ],
+    {
+      ignoreInputs: true,
+      preventDefault: true,
+      requireReset: true,
+      stopPropagation: true,
     }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [busy, document?.pages.length, exportState, redo, undo])
+  )
 
   async function openPdf(file: File, append = false) {
     setBusy(true)
@@ -1087,14 +1104,18 @@ export default function Editor() {
                   onClick={() => pdfInputRef.current?.click()}
                 >
                   <FilePlus2Icon /> Open PDF…
-                  <MenubarShortcut>⌘O</MenubarShortcut>
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.openPdf)}
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem
                   disabled={busy || !document}
                   onClick={() => appendInputRef.current?.click()}
                 >
                   <PlusIcon /> Append PDF…
-                  <MenubarShortcut>⇧⌘O</MenubarShortcut>
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.appendPdf)}
+                  </MenubarShortcut>
                 </MenubarItem>
               </MenubarGroup>
               <MenubarSeparator />
@@ -1104,7 +1125,9 @@ export default function Editor() {
                   onClick={() => setExportDialogOpen(true)}
                 >
                   <DownloadIcon /> Export PDF…
-                  <MenubarShortcut>⌘E</MenubarShortcut>
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.exportPdf)}
+                  </MenubarShortcut>
                 </MenubarItem>
               </MenubarGroup>
             </MenubarContent>
@@ -1116,11 +1139,15 @@ export default function Editor() {
               <MenubarGroup>
                 <MenubarItem disabled={!canUndo} onClick={() => undo()}>
                   <Undo2Icon /> Undo
-                  <MenubarShortcut>⌘Z</MenubarShortcut>
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.undo)}
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem disabled={!canRedo} onClick={() => redo()}>
                   <Redo2Icon /> Redo
-                  <MenubarShortcut>⇧⌘Z</MenubarShortcut>
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.redo)}
+                  </MenubarShortcut>
                 </MenubarItem>
               </MenubarGroup>
               <MenubarSeparator />
