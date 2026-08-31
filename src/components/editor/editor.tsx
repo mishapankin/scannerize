@@ -38,6 +38,7 @@ import {
   TextCursorInputIcon,
   Trash2Icon,
   Undo2Icon,
+  XIcon,
 } from "lucide-react"
 import { useStore } from "zustand"
 
@@ -118,6 +119,7 @@ import {
 import { exportDocument, importPdfFile, renderPageComposite } from "@/lib/pdf-engine"
 import type { ExportSettings } from "@/lib/export-plan"
 import { getTextResizeMode } from "@/lib/text-layout"
+import { useEditorPersistence } from "@/lib/use-editor-persistence"
 import { cn } from "@/lib/utils"
 import type {
   EditorLayer,
@@ -873,6 +875,7 @@ function Workspace({ page }: { page: EditorPage | null }) {
 }
 
 export default function Editor() {
+  const persistence = useEditorPersistence()
   const document = useEditorStore((state) => state.document)
   const selectedPageId = useEditorStore((state) => state.selectedPageId)
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
@@ -912,7 +915,9 @@ export default function Editor() {
     total: number
   } | null>(null)
 
-  const commandShortcutsEnabled = !exportDialogOpen && !deletePageId
+  const restoring = persistence.status === "loading"
+  const commandShortcutsEnabled =
+    !restoring && !exportDialogOpen && !deletePageId
 
   useHotkeys(
     [
@@ -965,11 +970,12 @@ export default function Editor() {
       if (append && document) {
         appendPages(imported.pages)
       } else {
-        setDocument({
+        const nextDocument = {
           id: crypto.randomUUID(),
           name: imported.name,
           pages: imported.pages,
-        })
+        }
+        setDocument(nextDocument)
         clearEditorHistory()
       }
     } catch (cause) {
@@ -1066,6 +1072,15 @@ export default function Editor() {
     }
   }
 
+  async function closeDocument() {
+    setBusy(true)
+    try {
+      await persistence.closeDocument()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function handlePdfInput(
     event: ChangeEvent<HTMLInputElement>,
     append = false
@@ -1100,7 +1115,7 @@ export default function Editor() {
             <MenubarContent>
               <MenubarGroup>
                 <MenubarItem
-                  disabled={busy}
+                  disabled={busy || restoring}
                   onClick={() => pdfInputRef.current?.click()}
                 >
                   <FilePlus2Icon /> Open PDF…
@@ -1109,7 +1124,7 @@ export default function Editor() {
                   </MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem
-                  disabled={busy || !document}
+                  disabled={busy || restoring || !document}
                   onClick={() => appendInputRef.current?.click()}
                 >
                   <PlusIcon /> Append PDF…
@@ -1128,6 +1143,15 @@ export default function Editor() {
                   <MenubarShortcut>
                     {formatEditorShortcut(EDITOR_SHORTCUTS.exportPdf)}
                   </MenubarShortcut>
+                </MenubarItem>
+              </MenubarGroup>
+              <MenubarSeparator />
+              <MenubarGroup>
+                <MenubarItem
+                  disabled={busy || restoring || Boolean(exportState) || !document}
+                  onClick={() => void closeDocument()}
+                >
+                  <XIcon /> Close document
                 </MenubarItem>
               </MenubarGroup>
             </MenubarContent>
@@ -1182,22 +1206,22 @@ export default function Editor() {
             <MenubarContent>
               <MenubarGroup>
                 <MenubarItem
-                  disabled={busy}
+                  disabled={busy || restoring}
                   onClick={() => imageInputRef.current?.click()}
                 >
                   <ImagePlusIcon /> Image…
                 </MenubarItem>
-                <MenubarItem onClick={addText}>
+                <MenubarItem disabled={restoring} onClick={addText}>
                   <TextCursorInputIcon /> Text
                 </MenubarItem>
               </MenubarGroup>
               <MenubarSeparator />
               <MenubarGroup>
-                <MenubarItem onClick={addBlankPage}>
+                <MenubarItem disabled={restoring} onClick={addBlankPage}>
                   <PlusIcon /> Blank page
                 </MenubarItem>
                 <MenubarItem
-                  disabled={busy}
+                  disabled={busy || restoring}
                   onClick={() => appendInputRef.current?.click()}
                 >
                   <FilePlus2Icon /> PDF pages…
@@ -1248,9 +1272,30 @@ export default function Editor() {
         </span>
 
         <div className="ml-auto flex items-center gap-1">
-          {error && (
+          {persistence.status !== "idle" && (
+            <span
+              className={cn(
+                "px-1 text-xs text-muted-foreground",
+                (persistence.status === "error" ||
+                  persistence.status === "conflict") &&
+                  "text-destructive"
+              )}
+              aria-live="polite"
+            >
+              {persistence.status === "loading"
+                ? "Restoring…"
+                : persistence.status === "saving"
+                  ? "Saving…"
+                  : persistence.status === "error"
+                    ? "Not saved"
+                    : persistence.status === "conflict"
+                      ? "Open elsewhere"
+                    : "Saved"}
+            </span>
+          )}
+          {(error || persistence.error) && (
             <span className="max-w-64 truncate text-xs text-destructive" role="alert">
-              {error}
+              {error || persistence.error}
             </span>
           )}
           {exportState && (

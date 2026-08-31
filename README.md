@@ -17,6 +17,10 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 - Export at 96, 150, or 300 DPI, preserve untouched source pages, and keep,
   limit, or normalize physical page sizes.
 - Install and reopen the application offline after its first GitHub Pages visit.
+- Restore the active document after reload from an on-device IndexedDB autosave,
+  including original PDFs and imported images.
+- Edit different documents safely in different tabs; each document has a URL
+  identity, while a second editor for the same document is blocked.
 
 Imported PDF text, vectors, links, forms, and annotations are not editable.
 Untouched pages can be copied into the result without flattening; edited or
@@ -26,9 +30,11 @@ resized pages are intentionally flattened during export.
 
 The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows use animated sorting as they are dragged, support keyboard reordering from the focused row, and commit one undoable change when dropped. Page actions are available from the thumbnail context menu. Select, pan, zoom, and fit controls sit directly on the workspace beneath the active page.
 
-The top application bar uses compact File, Edit, Insert, and Page menus. The
-document name stays centered, while the Scannerize brand and menus sit on the
-left and history controls with the primary Export action remain on the right.
+The top application bar uses compact File, Edit, Insert, and Page menus. File
+includes Close document, which flushes autosave and releases that tab without
+deleting the saved document. The document name stays centered, while the
+Scannerize brand and menus sit on the left and history controls with the primary
+Export action remain on the right.
 
 The interface uses shadcn/Base UI components installed through `shadcn add` and Lucide icons. It avoids dashboard-style cards: bordered containers are reserved for functional items such as page thumbnails, the paper surface, dialogs, and menus.
 
@@ -50,12 +56,24 @@ Next.js uses `output: "export"` and produces a deployable `out/` directory. Ther
 - `@dnd-kit/react` provides animated pointer, touch, and keyboard sorting for pages and layers.
 - `@tanstack/react-hotkeys` registers application commands and formats their
   platform-correct menu shortcuts.
+- Dexie stores documents and their source assets in IndexedDB using a
+  versioned schema scoped to the deployment base path.
 - `zustand`, `immer`, and `zundo` hold the serializable document model and history.
 - `pdf-lib` creates the final PDF from page-sized flattened canvases.
 - Workbox generates `out/sw.js` after the static build and precaches the application shell.
 - Manrope Variable and Source Serif 4 Variable are bundled locally.
 
 Page and layer geometry is stored in PDF points, independent of screen zoom and export DPI. PDF.js proxies, decoded images, object URLs, and canvases stay in disposable runtime registries rather than editor history.
+
+Autosave writes each serializable document after completed edits and stores each
+source PDF or image once by stable ID. The document ID is encoded in the URL
+hash, which remains compatible with a static GitHub Pages export and lets each
+tab reload its own document. Web Locks provide exclusive editing ownership per
+document, with BroadcastChannel coordination as a fallback; different document
+IDs remain independently editable. Reload recovery recreates PDF.js proxies,
+decoded images, and object URLs from persisted source assets. Browser storage
+remains local to the current origin and can still be removed when the user
+clears site data; exporting a PDF remains the durable external backup.
 
 Export is sequential. Untouched, unscaled PDF pages can be copied directly into
 the result. Other pages are rasterized at the chosen DPI, visible overlays are
@@ -95,5 +113,7 @@ pnpm build
 - Editing targets desktop and tablet landscape; narrow screens show a width notice.
 - Text is edited in the properties panel rather than directly on the canvas.
 - Blank pages use A4 size.
-- Work is kept in memory until export; there is no autosaved project format yet.
+- Saved documents can be reopened by their document URL or as the most recently
+  active document; there is not yet a recent-document browser or downloadable
+  editable project format.
 - Very large PDFs and 300 DPI exports remain subject to each browser's memory and canvas limits.

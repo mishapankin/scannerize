@@ -17,6 +17,8 @@ type PdfSource = {
   document: PDFDocumentProxy
 }
 
+export type PersistedPdfSource = Pick<PdfSource, "id" | "name" | "bytes">
+
 const pdfSources = new Map<string, PdfSource>()
 let workerConfigured = false
 
@@ -33,39 +35,78 @@ async function getPdfJs() {
 }
 
 export async function importPdfFile(file: File) {
-  const pdfjs = await getPdfJs()
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const document = await pdfjs.getDocument({ data: bytes.slice() }).promise
   const sourceId = crypto.randomUUID()
-
-  pdfSources.set(sourceId, {
+  const source = await registerPdfSource({
     id: sourceId,
     name: file.name,
     bytes,
-    document,
   })
+  const { document } = source
 
-  const pages: EditorPage[] = []
-  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-    const page = await document.getPage(pageNumber)
-    const viewport = page.getViewport({ scale: 1 })
-    pages.push({
-      id: crypto.randomUUID(),
-      name: `Page ${pageNumber}`,
-      widthPt: viewport.width,
-      heightPt: viewport.height,
-      rotation: 0,
-      background: { type: "pdf", sourceId, pageNumber },
-      layers: [],
-    })
-    page.cleanup()
-  }
+  try {
+    const pages: EditorPage[] = []
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber)
+      const viewport = page.getViewport({ scale: 1 })
+      pages.push({
+        id: crypto.randomUUID(),
+        name: `Page ${pageNumber}`,
+        widthPt: viewport.width,
+        heightPt: viewport.height,
+        rotation: 0,
+        background: { type: "pdf", sourceId, pageNumber },
+        layers: [],
+      })
+      page.cleanup()
+    }
 
-  return {
-    sourceId,
-    name: file.name.replace(/\.pdf$/i, ""),
-    pages,
+    return {
+      sourceId,
+      name: file.name.replace(/\.pdf$/i, ""),
+      pages,
+    }
+  } catch (error) {
+    pdfSources.delete(sourceId)
+    await document.cleanup()
+    throw error
   }
+}
+
+async function registerPdfSource(asset: PersistedPdfSource) {
+  const pdfjs = await getPdfJs()
+  const document = await pdfjs.getDocument({ data: asset.bytes.slice() }).promise
+  const previous = pdfSources.get(asset.id)
+  if (previous) await previous.document.cleanup()
+
+  const source = {
+    id: asset.id,
+    name: asset.name,
+    bytes: asset.bytes,
+    document,
+  }
+  pdfSources.set(asset.id, source)
+  return source
+}
+
+export async function restorePdfSource(asset: PersistedPdfSource) {
+  await registerPdfSource(asset)
+}
+
+export function getPersistedPdfSource(id: string): PersistedPdfSource | null {
+  const source = pdfSources.get(id)
+  if (!source) return null
+  return { id: source.id, name: source.name, bytes: source.bytes }
+}
+
+export async function retainPdfSources(ids: ReadonlySet<string>) {
+  const discarded = Array.from(pdfSources.entries()).filter(
+    ([id]) => !ids.has(id)
+  )
+  for (const [id] of discarded) pdfSources.delete(id)
+  await Promise.allSettled(
+    discarded.map(([, source]) => source.document.cleanup())
+  )
 }
 
 export async function clearPdfSources() {
