@@ -46,6 +46,8 @@ type PageCanvasProps = {
   page: EditorPage
   width: number
   height: number
+  onEditLayer?: (layerId: string) => void
+  showControls?: boolean
 }
 
 type Viewport = {
@@ -167,10 +169,12 @@ function CanvasLayerNode({
   layer,
   page,
   registerRef,
+  onEditLayer,
 }: {
   layer: EditorLayer
   page: EditorPage
   registerRef: (id: string, node: Konva.Node | null) => void
+  onEditLayer?: (layerId: string) => void
 }) {
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const selectLayer = useEditorStore((state) => state.selectLayer)
@@ -196,6 +200,16 @@ function CanvasLayerNode({
     onTap: (event: Konva.KonvaEventObject<TouchEvent>) => {
       event.cancelBubble = true
       selectLayer(layer.id)
+    },
+    onDblClick: (event: Konva.KonvaEventObject<MouseEvent>) => {
+      event.cancelBubble = true
+      selectLayer(layer.id)
+      onEditLayer?.(layer.id)
+    },
+    onDblTap: (event: Konva.KonvaEventObject<TouchEvent>) => {
+      event.cancelBubble = true
+      selectLayer(layer.id)
+      onEditLayer?.(layer.id)
     },
     onDragEnd: (event: Konva.KonvaEventObject<DragEvent>) => {
       updateLayer(page.id, layer.id, {
@@ -336,7 +350,13 @@ function getTouchDistance(touches: TouchList) {
   )
 }
 
-export function PageCanvas({ page, width, height }: PageCanvasProps) {
+export function PageCanvas({
+  page,
+  width,
+  height,
+  onEditLayer,
+  showControls = true,
+}: PageCanvasProps) {
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const selectLayer = useEditorStore((state) => state.selectLayer)
   const transformerRef = useRef<Konva.Transformer>(null)
@@ -637,12 +657,16 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
           const touches = event.evt.touches
           const stage = event.target.getStage()
 
-          if (touches.length === 1 && tool !== "select") {
+          if (
+            touches.length === 1 &&
+            (tool !== "select" || event.target === stage)
+          ) {
             const pointer = stage?.getPointerPosition()
             if (!pointer) return
             event.evt.preventDefault()
             event.target.stopDrag()
-            if (tool === "pan") {
+            if (tool === "pan" || tool === "select") {
+              if (tool === "select") selectLayer(null)
               panStartRef.current = { pointer, viewport }
               setIsPanning(true)
             } else {
@@ -652,7 +676,6 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
             return
           }
           if (touches.length !== 2) {
-            if (tool === "select" && event.target === stage) selectLayer(null)
             return
           }
           event.evt.preventDefault()
@@ -758,6 +781,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
                   if (node) nodeRefs.current.set(id, node)
                   else nodeRefs.current.delete(id)
                 }}
+                onEditLayer={onEditLayer}
               />
             ))}
             <Transformer
@@ -789,6 +813,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
         </KonvaLayer>
       </Stage>
 
+      {showControls && (
       <div className="canvas-controls" role="toolbar" aria-label="Canvas view">
         <ToggleGroup
           value={[tool]}
@@ -841,6 +866,7 @@ export function PageCanvas({ page, width, height }: PageCanvasProps) {
           <PlusIcon />
         </CanvasControl>
       </div>
+      )}
     </div>
   )
 }

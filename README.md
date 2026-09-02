@@ -28,7 +28,7 @@ resized pages are intentionally flattened during export.
 
 ## Interface
 
-The full-screen layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. Page and layer rows use animated sorting as they are dragged, support keyboard reordering from the focused row, and commit one undoable change when dropped. Page actions are available from the thumbnail context menu. Select, pan, zoom, and fit controls sit directly on the workspace beneath the active page.
+The full-screen desktop layout has a page filmstrip on the left, a React Konva workspace in the center, and a layer stack with selected-layer properties on the right. Panels are resizable. On narrow screens, the canvas stays permanent while Pages opens as a full-viewport drawer from the left and Layers/Properties share a full-viewport Inspector drawer from the right. Mobile commands use a flat top bar and edge-to-edge lists; the desktop canvas navigation bar is omitted in favor of direct pan and pinch gestures. Page and layer rows use animated sorting as they are dragged, support keyboard reordering from the focused row, and commit one undoable change when dropped. Page actions are available from the thumbnail context menu. Desktop Select, Pan, Zoom, and Fit controls sit directly beneath the active page.
 
 The top application bar uses compact File, Edit, Insert, and Page menus. File
 includes Close document, which flushes autosave and releases that tab without
@@ -110,7 +110,7 @@ pnpm build
 
 ## Current limits
 
-- Editing targets desktop and tablet landscape; narrow screens show a width notice.
+- Narrow screens use a canvas-first mobile layout with touch-sized controls and full-viewport drawers; desktop and tablet landscape retain the three-pane layout.
 - Text is edited in the properties panel rather than directly on the canvas.
 - Blank pages use A4 size.
 - Saved documents can be reopened by their document URL or as the most recently

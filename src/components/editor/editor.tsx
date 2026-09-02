@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/dom"
 import { useHotkeys } from "@tanstack/react-hotkeys"
 import {
+  type LucideIcon,
   AlignCenterIcon,
   AlignLeftIcon,
   AlignRightIcon,
@@ -26,15 +27,18 @@ import {
   EyeOffIcon,
   FileImageIcon,
   FilePlus2Icon,
+  FilesIcon,
   GripVerticalIcon,
   ImagePlusIcon,
   Layers3Icon,
   LockIcon,
+  MenuIcon,
   PencilIcon,
   PlusIcon,
   Redo2Icon,
   RotateCwIcon,
   ScanLineIcon,
+  SlidersHorizontalIcon,
   TextCursorInputIcon,
   Trash2Icon,
   Undo2Icon,
@@ -65,6 +69,13 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   Empty,
   EmptyHeader,
   EmptyMedia,
@@ -72,6 +83,7 @@ import {
 } from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
 import {
   Menubar,
   MenubarContent,
@@ -132,6 +144,9 @@ type IconButtonProps = ComponentProps<typeof Button> & {
   label: string
 }
 
+type MobileDrawerName = "menu" | "pages" | "insert" | "inspector"
+type MobileInspectorView = "layers" | "properties"
+
 const MAX_THUMBNAIL_WIDTH = 132
 const MAX_THUMBNAIL_HEIGHT = 160
 const MAX_THUMBNAIL_SCALE = 0.24
@@ -158,6 +173,21 @@ const SORTABLE_SENSORS = [
   }),
   KeyboardSensor,
 ]
+
+function useNarrowLayout() {
+  const [narrow, setNarrow] = useState(() =>
+    window.matchMedia("(max-width: 899px)").matches
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 899px)")
+    const update = () => setNarrow(media.matches)
+    media.addEventListener("change", update)
+    return () => media.removeEventListener("change", update)
+  }, [])
+
+  return narrow
+}
 
 function IconButton({ label, children, ...props }: IconButtonProps) {
   const button = (
@@ -256,11 +286,15 @@ function SortablePage({
   index,
   selected,
   onDelete,
+  onSelect,
+  mobile = false,
 }: {
   page: EditorPage
   index: number
   selected: boolean
   onDelete: (pageId: string) => void
+  onSelect?: (pageId: string) => void
+  mobile?: boolean
 }) {
   const selectPage = useEditorStore((state) => state.selectPage)
   const duplicatePage = useEditorStore((state) => state.duplicatePage)
@@ -277,45 +311,90 @@ function SortablePage({
       <ContextMenuTrigger
         ref={ref}
         className={cn(
-          "sortable-item block rounded-lg",
+          "sortable-item block",
+          !mobile && "rounded-lg",
           isDragSource && "opacity-70"
         )}
       >
         <button
           ref={handleRef}
           type="button"
-          onClick={() => selectPage(page.id)}
+          onClick={() => {
+            selectPage(page.id)
+            onSelect?.(page.id)
+          }}
           className={cn(
-            "group flex w-full touch-none cursor-grab flex-col gap-2 rounded-lg border bg-workspace p-2 text-left text-workspace-foreground outline-none transition-colors active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring",
+            "group w-full cursor-grab text-left outline-none transition-colors active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring",
+            mobile
+              ? "grid min-h-28 grid-cols-[5rem_1fr] items-center gap-3 rounded-none border-0 px-3 py-2"
+              : "flex flex-col gap-2 rounded-lg border bg-workspace p-2 text-workspace-foreground",
+            mobile ? "touch-pan-y" : "touch-none",
             selected
-              ? "border-primary"
-              : "border-sidebar-border hover:border-muted-foreground"
+              ? mobile
+                ? "bg-accent text-accent-foreground"
+                : "border-primary"
+              : mobile
+                ? "bg-popover hover:bg-muted"
+                : "border-sidebar-border hover:border-muted-foreground"
           )}
         >
-          <span className="flex items-center gap-1.5 text-xs font-medium">
-            <GripVerticalIcon
-              className={cn(
-                "size-3",
-                selected
-                  ? "text-sidebar-accent-foreground"
-                  : "text-muted-foreground"
-              )}
-            />
-            {index + 1}
-            <span
-              className={cn(
-                "ml-auto truncate",
-                selected
-                  ? "text-sidebar-accent-foreground"
-                  : "text-muted-foreground"
-              )}
-            >
-              {Math.round(page.widthPt)} × {Math.round(page.heightPt)}
-            </span>
-          </span>
-          <span className="flex min-h-28 items-center justify-center overflow-hidden rounded-md p-2">
-            <PageThumbnail page={page} />
-          </span>
+          {mobile ? (
+            <>
+              <span className="flex h-24 items-center justify-center overflow-hidden">
+                <PageThumbnail page={page} />
+              </span>
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <GripVerticalIcon
+                    className={cn(
+                      "size-3",
+                      selected
+                        ? "text-accent-foreground"
+                        : "text-muted-foreground"
+                    )}
+                  />
+                  Page {index + 1}
+                </span>
+                <span
+                  className={cn(
+                    "text-xs",
+                    selected
+                      ? "text-accent-foreground"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {Math.round(page.widthPt)} × {Math.round(page.heightPt)} pt
+                </span>
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5 text-xs font-medium">
+                <GripVerticalIcon
+                  className={cn(
+                    "size-3",
+                    selected
+                      ? "text-sidebar-accent-foreground"
+                      : "text-muted-foreground"
+                  )}
+                />
+                {index + 1}
+                <span
+                  className={cn(
+                    "ml-auto truncate",
+                    selected
+                      ? "text-sidebar-accent-foreground"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {Math.round(page.widthPt)} × {Math.round(page.heightPt)}
+                </span>
+              </span>
+              <span className="flex min-h-28 items-center justify-center overflow-hidden rounded-md p-2">
+                <PageThumbnail page={page} />
+              </span>
+            </>
+          )}
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -341,7 +420,15 @@ function SortablePage({
   )
 }
 
-function PageRail({ onDelete }: { onDelete: (pageId: string) => void }) {
+function PageRail({
+  onDelete,
+  onSelect,
+  mobile = false,
+}: {
+  onDelete: (pageId: string) => void
+  onSelect?: (pageId: string) => void
+  mobile?: boolean
+}) {
   const document = useEditorStore((state) => state.document)
   const selectedPageId = useEditorStore((state) => state.selectedPageId)
   const addBlankPage = useEditorStore((state) => state.addBlankPage)
@@ -363,17 +450,31 @@ function PageRail({ onDelete }: { onDelete: (pageId: string) => void }) {
   }
 
   return (
-    <aside className="flex h-full min-w-0 flex-col bg-sidebar">
-      <div className="panel-heading">
-        <span>Pages</span>
-        <span className="text-muted-foreground">{document?.pages.length ?? 0}</span>
-      </div>
+    <aside
+      className={cn(
+        "flex h-full min-w-0 flex-col",
+        mobile ? "bg-popover" : "bg-sidebar"
+      )}
+    >
+      {!mobile && (
+        <div className="panel-heading">
+          <span>Pages</span>
+          <span className="text-muted-foreground">
+            {document?.pages.length ?? 0}
+          </span>
+        </div>
+      )}
       <ScrollArea className="min-h-0 flex-1">
         <DragDropProvider
           sensors={SORTABLE_SENSORS}
           onDragEnd={handlePageDragEnd}
         >
-          <div className="flex flex-col gap-2 p-3">
+          <div
+            className={cn(
+              "flex flex-col",
+              mobile ? "gap-0" : "gap-2 p-3"
+            )}
+          >
             {pages.map((page, index) => (
               <SortablePage
                 key={page.id}
@@ -381,17 +482,21 @@ function PageRail({ onDelete }: { onDelete: (pageId: string) => void }) {
                 index={index}
                 selected={selectedPageId === page.id}
                 onDelete={onDelete}
+                onSelect={onSelect}
+                mobile={mobile}
               />
             ))}
           </div>
         </DragDropProvider>
       </ScrollArea>
-      <div className="border-t p-2">
-        <Button variant="ghost" className="w-full" onClick={addBlankPage}>
-          <PlusIcon data-icon="inline-start" />
-          Add page
-        </Button>
-      </div>
+      {!mobile && (
+        <div className="border-t p-2">
+          <Button variant="ghost" className="w-full" onClick={addBlankPage}>
+            <PlusIcon data-icon="inline-start" />
+            Add page
+          </Button>
+        </div>
+      )}
     </aside>
   )
 }
@@ -400,10 +505,12 @@ function LayerRow({
   page,
   layer,
   index,
+  mobile = false,
 }: {
   page: EditorPage
   layer: EditorLayer
   index: number
+  mobile?: boolean
 }) {
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const selectLayer = useEditorStore((state) => state.selectLayer)
@@ -460,7 +567,8 @@ function LayerRow({
       <ContextMenuTrigger
         ref={ref}
         className={cn(
-          "sortable-item group flex h-9 items-center gap-1 px-2 text-sm",
+          "sortable-item group flex items-center gap-1 px-2 text-sm",
+          mobile ? "h-11" : "h-9",
           selected && "bg-accent text-accent-foreground",
           isDragSource && "opacity-70"
         )}
@@ -505,7 +613,8 @@ function LayerRow({
             ref={handleRef}
             type="button"
             className={cn(
-              "flex min-w-0 flex-1 touch-none items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              mobile ? "touch-pan-y" : "touch-none",
               layer.locked
                 ? "cursor-default"
                 : "cursor-grab active:cursor-grabbing"
@@ -533,6 +642,7 @@ function LayerRow({
         )}
         <IconButton
           label={layer.visible ? "Hide layer" : "Show layer"}
+          className={cn(mobile && "size-11")}
           onClick={() =>
             updateLayer(page.id, layer.id, { visible: !layer.visible })
           }
@@ -749,12 +859,14 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
   )
 }
 
-function LayersPanel({ page }: { page: EditorPage | null }) {
-  const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
+function LayerList({
+  page,
+  mobile = false,
+}: {
+  page: EditorPage | null
+  mobile?: boolean
+}) {
   const moveLayer = useEditorStore((state) => state.moveLayer)
-  const selectedLayer = page?.layers.find(
-    (layer) => layer.id === selectedLayerId
-  )
   const layers = page ? [...page.layers].reverse() : []
 
   function handleLayerDragEnd(event: DragEndEvent) {
@@ -772,11 +884,13 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
     if (target) moveLayer(page.id, String(source.id), target.id)
   }
 
-  const layerList = (
+  return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="panel-heading">
-        <span>Layers</span>
-      </div>
+      {!mobile && (
+        <div className="panel-heading">
+          <span>Layers</span>
+        </div>
+      )}
       <div className="min-h-0 flex-1">
         {!page ? null : page.layers.length === 0 ? (
           <Empty className="h-full rounded-none border-0">
@@ -800,6 +914,7 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
                     page={page}
                     layer={layer}
                     index={index}
+                    mobile={mobile}
                   />
                 ))}
               </div>
@@ -811,6 +926,13 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
         )}
       </div>
     </div>
+  )
+}
+
+function LayersPanel({ page }: { page: EditorPage | null }) {
+  const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
+  const selectedLayer = page?.layers.find(
+    (layer) => layer.id === selectedLayerId
   )
 
   return (
@@ -832,14 +954,22 @@ function LayersPanel({ page }: { page: EditorPage | null }) {
           aria-label="Resize properties and layers"
         />
         <ResizablePanel id="layer-list" minSize={96}>
-          {layerList}
+          <LayerList page={page} />
         </ResizablePanel>
       </ResizablePanelGroup>
     </aside>
   )
 }
 
-function Workspace({ page }: { page: EditorPage | null }) {
+function Workspace({
+  page,
+  onEditLayer,
+  showCanvasControls = true,
+}: {
+  page: EditorPage | null
+  onEditLayer?: (layerId: string) => void
+  showCanvasControls?: boolean
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 900, height: 700 })
 
@@ -859,7 +989,13 @@ function Workspace({ page }: { page: EditorPage | null }) {
   return (
     <main ref={containerRef} className="workspace-grid relative h-full overflow-hidden">
       {page ? (
-        <PageCanvas page={page} width={size.width} height={size.height} />
+        <PageCanvas
+          page={page}
+          width={size.width}
+          height={size.height}
+          onEditLayer={onEditLayer}
+          showControls={showCanvasControls}
+        />
       ) : (
         <Empty className="h-full rounded-none border-0">
           <EmptyMedia className="text-foreground [&_svg]:size-12">
@@ -874,7 +1010,87 @@ function Workspace({ page }: { page: EditorPage | null }) {
   )
 }
 
+function MobileDrawer({
+  open,
+  onOpenChange,
+  title,
+  side,
+  actions,
+  children,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  side: "left" | "right"
+  actions?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange} modal>
+      <DialogContent
+        showCloseButton={false}
+        className={cn(
+          "mobile-drawer",
+          side === "left" ? "mobile-drawer-left" : "mobile-drawer-right"
+        )}
+      >
+        <DialogHeader className="mobile-drawer-header">
+          <DialogTitle>{title}</DialogTitle>
+          <div className="ml-auto flex items-center gap-1">
+            {actions}
+            <DialogClose
+              render={
+                <Button variant="ghost" size="icon-lg" aria-label="Close" />
+              }
+            >
+              <XIcon />
+            </DialogClose>
+          </div>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function MobileAction({
+  icon: Icon,
+  children,
+  ...props
+}: ComponentProps<typeof Button> & {
+  icon: LucideIcon
+}) {
+  return (
+    <Button
+      variant="ghost"
+      className="mobile-command-action h-12 w-full justify-start px-4"
+      {...props}
+    >
+      <Icon data-icon="inline-start" />
+      {children}
+    </Button>
+  )
+}
+
+function MobileActionGroup({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-1">
+      <h3 className="px-4 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
 export default function Editor() {
+  const narrowLayout = useNarrowLayout()
   const persistence = useEditorPersistence()
   const document = useEditorStore((state) => state.document)
   const selectedPageId = useEditorStore((state) => state.selectedPageId)
@@ -890,9 +1106,9 @@ export default function Editor() {
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
   const selectedPage =
     document?.pages.find((page) => page.id === selectedPageId) ?? null
-  const hasSelectedLayer = Boolean(
-    selectedPage?.layers.some((layer) => layer.id === selectedLayerId)
-  )
+  const selectedLayer =
+    selectedPage?.layers.find((layer) => layer.id === selectedLayerId) ?? null
+  const hasSelectedLayer = Boolean(selectedLayer)
   const undo = useStore(useEditorStore.temporal, (state) => state.undo)
   const redo = useStore(useEditorStore.temporal, (state) => state.redo)
   const canUndo = useStore(
@@ -910,6 +1126,9 @@ export default function Editor() {
   const [error, setError] = useState<string | null>(null)
   const [deletePageId, setDeletePageId] = useState<string | null>(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [mobileDrawer, setMobileDrawer] = useState<MobileDrawerName | null>(null)
+  const [mobileInspectorView, setMobileInspectorView] =
+    useState<MobileInspectorView>("layers")
   const [exportState, setExportState] = useState<{
     current: number
     total: number
@@ -1107,7 +1326,48 @@ export default function Editor() {
       onDragOver={(event) => event.preventDefault()}
       onDrop={handleDrop}
     >
-      <header className="toolbar">
+      <header className="mobile-toolbar">
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          aria-label="Open application menu"
+          onClick={() => setMobileDrawer("menu")}
+        >
+          <MenuIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          aria-label={`Pages, ${document?.pages.length ?? 0}`}
+          onClick={() => setMobileDrawer("pages")}
+        >
+          <FilesIcon />
+        </Button>
+        <span className="min-w-0 flex-1 truncate text-center text-sm font-medium">
+          {document?.name ?? "Untitled"}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          aria-label="Insert"
+          onClick={() => setMobileDrawer("insert")}
+        >
+          <PlusIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          aria-label="Open inspector"
+          onClick={() => {
+            setMobileInspectorView(selectedLayer ? "properties" : "layers")
+            setMobileDrawer("inspector")
+          }}
+        >
+          <SlidersHorizontalIcon />
+        </Button>
+      </header>
+
+      <header className="toolbar desktop-toolbar">
         <div className="brand mr-3">Scannerize</div>
         <Menubar aria-label="Application menu">
           <MenubarMenu>
@@ -1338,24 +1598,341 @@ export default function Editor() {
         </div>
       </header>
 
-      <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel id="pages" defaultSize={190} minSize={150} maxSize={280}>
-          <PageRail onDelete={setDeletePageId} />
-        </ResizablePanel>
-        <ResizableHandle />
-        <ResizablePanel id="workspace" minSize={420}>
-          <Workspace page={selectedPage} />
-        </ResizablePanel>
-        <ResizableHandle />
-        <ResizablePanel id="layers" defaultSize={278} minSize={230} maxSize={360}>
-          <LayersPanel page={selectedPage} />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+      {narrowLayout ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          {(error ||
+            persistence.error ||
+            persistence.status === "conflict" ||
+            exportState) && (
+            <div
+              className="flex h-7 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-3 text-xs"
+              aria-live="polite"
+              role={error || persistence.error ? "alert" : "status"}
+            >
+              {exportState ? (
+                <>
+                  <Progress
+                    value={
+                      exportState.total
+                        ? (exportState.current / exportState.total) * 100
+                        : 0
+                    }
+                    className="flex-1"
+                  />
+                  <span className="text-muted-foreground">
+                    {exportState.current}/{exportState.total}
+                  </span>
+                </>
+              ) : (
+                <span className="truncate text-destructive">
+                  {error || persistence.error || "This document is open elsewhere."}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="min-h-0 flex-1">
+            <Workspace
+              page={selectedPage}
+              showCanvasControls={false}
+              onEditLayer={() => {
+                setMobileInspectorView("properties")
+                setMobileDrawer("inspector")
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+          <ResizablePanel id="pages" defaultSize={190} minSize={150} maxSize={280}>
+            <PageRail onDelete={setDeletePageId} />
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel id="workspace" minSize={420}>
+            <Workspace page={selectedPage} />
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel id="layers" defaultSize={278} minSize={230} maxSize={360}>
+            <LayersPanel page={selectedPage} />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
 
-      <div className="mobile-blocker">
-        <ScanLineIcon />
-        <span>Use a wider screen to edit.</span>
-      </div>
+      <MobileDrawer
+        side="left"
+        open={narrowLayout && mobileDrawer === "pages"}
+        onOpenChange={(open) => setMobileDrawer(open ? "pages" : null)}
+        title={`Pages · ${document?.pages.length ?? 0}`}
+        actions={
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            aria-label="Add blank page"
+            onClick={addBlankPage}
+          >
+            <PlusIcon />
+          </Button>
+        }
+      >
+        <PageRail
+          mobile
+          onSelect={() => setMobileDrawer(null)}
+          onDelete={(pageId) => {
+            setMobileDrawer(null)
+            setDeletePageId(pageId)
+          }}
+        />
+      </MobileDrawer>
+
+      <MobileDrawer
+        side="right"
+        open={narrowLayout && mobileDrawer === "inspector"}
+        onOpenChange={(open) => setMobileDrawer(open ? "inspector" : null)}
+        title="Inspector"
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          <ToggleGroup
+            className="m-2 grid grid-cols-2"
+            variant="outline"
+            spacing={0}
+            value={[mobileInspectorView]}
+            onValueChange={(value) => {
+              const nextView = value[0] as MobileInspectorView | undefined
+              if (nextView) setMobileInspectorView(nextView)
+            }}
+            aria-label="Inspector view"
+          >
+            <ToggleGroupItem value="layers">Layers</ToggleGroupItem>
+            <ToggleGroupItem value="properties" disabled={!selectedLayer}>
+              Properties
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <Separator />
+          <div className="min-h-0 flex-1">
+            {mobileInspectorView === "layers" ? (
+              <LayerList mobile page={selectedPage} />
+            ) : (
+              <ScrollArea className="h-full">
+                {selectedPage && selectedLayer && (
+                  <LayerProperties page={selectedPage} layer={selectedLayer} />
+                )}
+              </ScrollArea>
+            )}
+          </div>
+        </div>
+      </MobileDrawer>
+
+      <MobileDrawer
+        side="right"
+        open={narrowLayout && mobileDrawer === "insert"}
+        onOpenChange={(open) => setMobileDrawer(open ? "insert" : null)}
+        title="Insert"
+      >
+        <div className="flex flex-col py-2">
+          <MobileAction
+            icon={ImagePlusIcon}
+            disabled={busy || restoring}
+            onClick={() => {
+              setMobileDrawer(null)
+              imageInputRef.current?.click()
+            }}
+          >
+            Image…
+          </MobileAction>
+          <MobileAction
+            icon={TextCursorInputIcon}
+            disabled={restoring}
+            onClick={() => {
+              setMobileDrawer(null)
+              addText()
+            }}
+          >
+            Text
+          </MobileAction>
+          <MobileAction
+            icon={PlusIcon}
+            disabled={restoring}
+            onClick={() => {
+              setMobileDrawer(null)
+              addBlankPage()
+            }}
+          >
+            Blank page
+          </MobileAction>
+          <MobileAction
+            icon={FilePlus2Icon}
+            disabled={busy || restoring}
+            onClick={() => {
+              setMobileDrawer(null)
+              appendInputRef.current?.click()
+            }}
+          >
+            PDF pages…
+          </MobileAction>
+        </div>
+      </MobileDrawer>
+
+      <MobileDrawer
+        side="left"
+        open={narrowLayout && mobileDrawer === "menu"}
+        onOpenChange={(open) => setMobileDrawer(open ? "menu" : null)}
+        title="Scannerize"
+      >
+        <ScrollArea className="h-full">
+          <div className="flex flex-col gap-4 py-3 pb-6">
+            <MobileActionGroup label="File">
+              <MobileAction
+                icon={FilePlus2Icon}
+                disabled={busy || restoring}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  pdfInputRef.current?.click()
+                }}
+              >
+                Open PDF…
+              </MobileAction>
+              <MobileAction
+                icon={PlusIcon}
+                disabled={busy || restoring || !document}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  appendInputRef.current?.click()
+                }}
+              >
+                Append PDF…
+              </MobileAction>
+              <MobileAction
+                icon={DownloadIcon}
+                disabled={!document?.pages.length || Boolean(exportState)}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  setExportDialogOpen(true)
+                }}
+              >
+                Export PDF…
+              </MobileAction>
+              <MobileAction
+                icon={XIcon}
+                disabled={busy || restoring || Boolean(exportState) || !document}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  void closeDocument()
+                }}
+              >
+                Close document
+              </MobileAction>
+            </MobileActionGroup>
+
+            <Separator />
+
+            <MobileActionGroup label="Edit">
+              <MobileAction icon={Undo2Icon} disabled={!canUndo} onClick={() => undo()}>
+                Undo
+              </MobileAction>
+              <MobileAction icon={Redo2Icon} disabled={!canRedo} onClick={() => redo()}>
+                Redo
+              </MobileAction>
+              <MobileAction
+                icon={CopyIcon}
+                disabled={!hasSelectedLayer}
+                onClick={() => {
+                  if (selectedPage && selectedLayerId) {
+                    duplicateLayer(selectedPage.id, selectedLayerId)
+                  }
+                }}
+              >
+                Duplicate layer
+              </MobileAction>
+              <MobileAction
+                icon={Trash2Icon}
+                variant="destructive"
+                disabled={!hasSelectedLayer}
+                onClick={() => {
+                  if (selectedPage && selectedLayerId) {
+                    deleteLayer(selectedPage.id, selectedLayerId)
+                  }
+                }}
+              >
+                Delete layer
+              </MobileAction>
+            </MobileActionGroup>
+
+            <Separator />
+
+            <MobileActionGroup label="Insert">
+              <MobileAction
+                icon={ImagePlusIcon}
+                disabled={busy || restoring}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  imageInputRef.current?.click()
+                }}
+              >
+                Image…
+              </MobileAction>
+              <MobileAction
+                icon={TextCursorInputIcon}
+                disabled={restoring}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  addText()
+                }}
+              >
+                Text
+              </MobileAction>
+              <MobileAction
+                icon={PlusIcon}
+                disabled={restoring}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  addBlankPage()
+                }}
+              >
+                Blank page
+              </MobileAction>
+              <MobileAction
+                icon={FilePlus2Icon}
+                disabled={busy || restoring}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  appendInputRef.current?.click()
+                }}
+              >
+                PDF pages…
+              </MobileAction>
+            </MobileActionGroup>
+
+            <Separator />
+
+            <MobileActionGroup label="Page">
+              <MobileAction
+                icon={CopyIcon}
+                disabled={!selectedPageId}
+                onClick={() => selectedPageId && duplicatePage(selectedPageId)}
+              >
+                Duplicate page
+              </MobileAction>
+              <MobileAction
+                icon={RotateCwIcon}
+                disabled={!selectedPageId}
+                onClick={() => selectedPageId && rotatePage(selectedPageId)}
+              >
+                Rotate clockwise
+              </MobileAction>
+              <MobileAction
+                icon={Trash2Icon}
+                variant="destructive"
+                disabled={!selectedPageId}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  if (selectedPageId) setDeletePageId(selectedPageId)
+                }}
+              >
+                Delete page
+              </MobileAction>
+            </MobileActionGroup>
+          </div>
+        </ScrollArea>
+      </MobileDrawer>
 
       <input
         ref={pdfInputRef}
