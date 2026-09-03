@@ -24,6 +24,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BrushIcon,
+  BringToFrontIcon,
   CircleIcon,
   ClipboardPasteIcon,
   CopyIcon,
@@ -48,6 +49,7 @@ import {
   SaveIcon,
   ScissorsIcon,
   ScanLineIcon,
+  SendToBackIcon,
   SlidersHorizontalIcon,
   SquareIcon,
   TextCursorInputIcon,
@@ -77,6 +79,10 @@ import {
   ContextMenuGroup,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import {
@@ -144,6 +150,10 @@ import {
   formatDeleteShortcut,
   formatEditorShortcut,
 } from "@/lib/editor-shortcuts"
+import {
+  getLayerOrderTargetId,
+  type LayerOrderDirection,
+} from "@/lib/layer-order"
 import { exportDocument, importPdfFile, renderPageComposite } from "@/lib/pdf-engine"
 import type { ExportSettings } from "@/lib/export-plan"
 import { getTextResizeMode } from "@/lib/text-layout"
@@ -575,6 +585,7 @@ function LayerRow({
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
+  const moveLayer = useEditorStore((state) => state.moveLayer)
   const renamingLayerId = useEditorStore((state) => state.renamingLayerId)
   const setRenamingLayer = useEditorStore((state) => state.setRenamingLayer)
   const [nameDraft, setNameDraft] = useState(layer.name)
@@ -582,6 +593,14 @@ function LayerRow({
   const renameInputRef = useRef<HTMLInputElement>(null)
   const selected = selectedLayerId === layer.id
   const renaming = renamingLayerId === layer.id
+  const layerIds = page.layers.map((item) => item.id)
+  const getOrderTarget = (direction: LayerOrderDirection) =>
+    getLayerOrderTargetId(layerIds, layer.id, direction)
+  const moveCurrentLayer = (direction: LayerOrderDirection) => {
+    if (layer.locked) return
+    const targetId = getOrderTarget(direction)
+    if (targetId) moveLayer(page.id, layer.id, targetId)
+  }
   const { ref, handleRef, isDragSource } = useSortable({
     id: layer.id,
     index,
@@ -712,6 +731,51 @@ function LayerRow({
           >
             <CopyIcon /> Duplicate
           </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <BringToFrontIcon /> Layer order
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuGroup>
+                <ContextMenuItem
+                  disabled={layer.locked || !getOrderTarget(1)}
+                  onClick={() => moveCurrentLayer(1)}
+                >
+                  <ArrowUpIcon /> Move forward
+                  <ContextMenuShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.moveLayerForward)}
+                  </ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem
+                  disabled={layer.locked || !getOrderTarget(-1)}
+                  onClick={() => moveCurrentLayer(-1)}
+                >
+                  <ArrowDownIcon /> Move backward
+                  <ContextMenuShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.moveLayerBackward)}
+                  </ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem
+                  disabled={layer.locked || !getOrderTarget("front")}
+                  onClick={() => moveCurrentLayer("front")}
+                >
+                  <BringToFrontIcon /> Bring to front
+                  <ContextMenuShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.moveLayerToFront)}
+                  </ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem
+                  disabled={layer.locked || !getOrderTarget("back")}
+                  onClick={() => moveCurrentLayer("back")}
+                >
+                  <SendToBackIcon /> Send to back
+                  <ContextMenuShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.moveLayerToBack)}
+                  </ContextMenuShortcut>
+                </ContextMenuItem>
+              </ContextMenuGroup>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
         </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuGroup>
@@ -1396,18 +1460,12 @@ export default function Editor() {
 
   function moveSelectedLayer(direction: -1 | 1 | "front" | "back") {
     if (!selectedPage || !selectedLayer || selectedLayer.locked) return
-    const layers = selectedPage.layers
-    const currentIndex = layers.findIndex((layer) => layer.id === selectedLayer.id)
-    const targetIndex =
-      direction === "front"
-        ? layers.length - 1
-        : direction === "back"
-          ? 0
-          : Math.min(layers.length - 1, Math.max(0, currentIndex + direction))
-    const target = layers[targetIndex]
-    if (target && target.id !== selectedLayer.id) {
-      moveLayer(selectedPage.id, selectedLayer.id, target.id)
-    }
+    const targetId = getLayerOrderTargetId(
+      selectedPage.layers.map((layer) => layer.id),
+      selectedLayer.id,
+      direction
+    )
+    if (targetId) moveLayer(selectedPage.id, selectedLayer.id, targetId)
   }
 
   function selectAdjacentPage(direction: -1 | 1) {

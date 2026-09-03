@@ -10,7 +10,10 @@ import {
 import Konva from "konva"
 import { useHotkeys } from "@tanstack/react-hotkeys"
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   BrushIcon,
+  BringToFrontIcon,
   ChevronDownIcon,
   CircleIcon,
   CopyIcon,
@@ -22,6 +25,7 @@ import {
   PentagonIcon,
   PlusIcon,
   SearchIcon,
+  SendToBackIcon,
   SquareIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -47,6 +51,10 @@ import {
   ContextMenuGroup,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import {
@@ -80,6 +88,10 @@ import {
   formatEditorShortcut,
 } from "@/lib/editor-shortcuts"
 import { useEditorStore } from "@/lib/editor-store"
+import {
+  getLayerOrderTargetId,
+  type LayerOrderDirection,
+} from "@/lib/layer-order"
 import { renderPageBackground } from "@/lib/pdf-engine"
 import {
   getDraggedShapeGeometry,
@@ -518,6 +530,7 @@ export function PageCanvas({
   const addLayer = useEditorStore((state) => state.addLayer)
   const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
+  const moveLayer = useEditorStore((state) => state.moveLayer)
   const setRenamingLayer = useEditorStore((state) => state.setRenamingLayer)
   const [contextLayerId, setContextLayerId] = useState<string | null>(null)
   const drawingTool = useEditorStore((state) => state.drawingTool)
@@ -1039,6 +1052,16 @@ export function PageCanvas({
 
   const selectedLayer = page.layers.find((layer) => layer.id === selectedLayerId)
   const contextLayer = page.layers.find((layer) => layer.id === contextLayerId)
+  const contextLayerIds = page.layers.map((layer) => layer.id)
+  const getContextOrderTarget = (direction: LayerOrderDirection) =>
+    contextLayer
+      ? getLayerOrderTargetId(contextLayerIds, contextLayer.id, direction)
+      : null
+  const moveContextLayer = (direction: LayerOrderDirection) => {
+    if (!contextLayer || contextLayer.locked) return
+    const targetId = getContextOrderTarget(direction)
+    if (targetId) moveLayer(page.id, contextLayer.id, targetId)
+  }
   const objectInteractionEnabled =
     tool === "select" &&
     !drawingTool &&
@@ -1621,6 +1644,69 @@ export function PageCanvas({
               >
                 <CopyIcon /> Duplicate
               </ContextMenuItem>
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                  <BringToFrontIcon /> Layer order
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent>
+                  <ContextMenuGroup>
+                    <ContextMenuItem
+                      disabled={
+                        contextLayer.locked || !getContextOrderTarget(1)
+                      }
+                      onClick={() => moveContextLayer(1)}
+                    >
+                      <ArrowUpIcon /> Move forward
+                      <ContextMenuShortcut>
+                        {formatEditorShortcut(
+                          EDITOR_SHORTCUTS.moveLayerForward
+                        )}
+                      </ContextMenuShortcut>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      disabled={
+                        contextLayer.locked || !getContextOrderTarget(-1)
+                      }
+                      onClick={() => moveContextLayer(-1)}
+                    >
+                      <ArrowDownIcon /> Move backward
+                      <ContextMenuShortcut>
+                        {formatEditorShortcut(
+                          EDITOR_SHORTCUTS.moveLayerBackward
+                        )}
+                      </ContextMenuShortcut>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      disabled={
+                        contextLayer.locked ||
+                        !getContextOrderTarget("front")
+                      }
+                      onClick={() => moveContextLayer("front")}
+                    >
+                      <BringToFrontIcon /> Bring to front
+                      <ContextMenuShortcut>
+                        {formatEditorShortcut(
+                          EDITOR_SHORTCUTS.moveLayerToFront
+                        )}
+                      </ContextMenuShortcut>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      disabled={
+                        contextLayer.locked ||
+                        !getContextOrderTarget("back")
+                      }
+                      onClick={() => moveContextLayer("back")}
+                    >
+                      <SendToBackIcon /> Send to back
+                      <ContextMenuShortcut>
+                        {formatEditorShortcut(
+                          EDITOR_SHORTCUTS.moveLayerToBack
+                        )}
+                      </ContextMenuShortcut>
+                    </ContextMenuItem>
+                  </ContextMenuGroup>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
             </ContextMenuGroup>
             <ContextMenuSeparator />
             <ContextMenuGroup>
