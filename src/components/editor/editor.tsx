@@ -714,6 +714,17 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const setBrushColor = useEditorStore((state) => state.setBrushColor)
   const setBrushWidth = useEditorStore((state) => state.setBrushWidth)
+  const setShapeFill = useEditorStore((state) => state.setShapeFill)
+  const setShapeFillEnabled = useEditorStore(
+    (state) => state.setShapeFillEnabled
+  )
+  const setShapeStroke = useEditorStore((state) => state.setShapeStroke)
+  const setShapeStrokeEnabled = useEditorStore(
+    (state) => state.setShapeStrokeEnabled
+  )
+  const setShapeStrokeWidth = useEditorStore(
+    (state) => state.setShapeStrokeWidth
+  )
   const colorGestureActiveRef = useRef(false)
   const shapeFillEnabled =
     layer.type === "shape" && isShapeFillEnabled(layer)
@@ -733,9 +744,13 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
     property: "fill" | "stroke" | "color",
     value: string
   ) => {
-    if (property === "fill") updateLayer(page.id, layer.id, { fill: value })
+    if (property === "fill") {
+      updateLayer(page.id, layer.id, { fill: value })
+      if (layer.type === "shape") setShapeFill(value)
+    }
     else if (property === "stroke") {
       updateLayer(page.id, layer.id, { stroke: value })
+      if (layer.type === "shape") setShapeStroke(value)
     } else {
       updateLayer(page.id, layer.id, { color: value })
       setBrushColor(value)
@@ -900,12 +915,13 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
                   <Switch
                     id="shape-fill-enabled"
                     checked={shapeFillEnabled}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={(checked) => {
                       updateLayer(page.id, layer.id, {
                         fill: layer.fill ?? "#FFFFFF",
                         fillEnabled: checked,
                       })
-                    }
+                      setShapeFillEnabled(checked)
+                    }}
                     aria-label="Enable fill"
                   />
                 </Field>
@@ -930,12 +946,13 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
               <Switch
                 id="shape-stroke-enabled"
                 checked={shapeStrokeEnabled}
-                onCheckedChange={(checked) =>
+                onCheckedChange={(checked) => {
                   updateLayer(page.id, layer.id, {
                     stroke: layer.stroke ?? "#26241F",
                     strokeEnabled: checked,
                   })
-                }
+                  setShapeStrokeEnabled(checked)
+                }}
                 aria-label="Enable stroke"
               />
             </Field>
@@ -963,14 +980,14 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
                 step={0.25}
                 value={layer.strokeWidth}
                 disabled={!shapeStrokeEnabled}
-                onChange={(event) =>
-                  updateLayer(page.id, layer.id, {
-                    strokeWidth: Math.min(
-                      72,
-                      Math.max(0.25, Number(event.target.value))
-                    ),
-                  })
-                }
+                onChange={(event) => {
+                  const strokeWidth = Math.min(
+                    72,
+                    Math.max(0.25, Number(event.target.value))
+                  )
+                  updateLayer(page.id, layer.id, { strokeWidth })
+                  setShapeStrokeWidth(strokeWidth)
+                }}
               />
             </Field>
           </>
@@ -1269,6 +1286,7 @@ export default function Editor() {
   const addBlankPage = useEditorStore((state) => state.addBlankPage)
   const addLayer = useEditorStore((state) => state.addLayer)
   const setDrawingTool = useEditorStore((state) => state.setDrawingTool)
+  const setShapeKind = useEditorStore((state) => state.setShapeKind)
   const deletePage = useEditorStore((state) => state.deletePage)
   const duplicatePage = useEditorStore((state) => state.duplicatePage)
   const rotatePage = useEditorStore((state) => state.rotatePage)
@@ -1411,6 +1429,7 @@ export default function Editor() {
 
   function chooseShapeTool(shape: ShapeKind) {
     ensurePage()
+    setShapeKind(shape)
     setDrawingTool(shape)
   }
 
@@ -1663,6 +1682,9 @@ export default function Editor() {
                 <MenubarSub>
                   <MenubarSubTrigger disabled={restoring}>
                     <SquareIcon /> Shape
+                    <MenubarShortcut>
+                      {formatEditorShortcut(EDITOR_SHORTCUTS.shapeTool)}
+                    </MenubarShortcut>
                   </MenubarSubTrigger>
                   <MenubarSubContent>
                     <MenubarGroup>
@@ -1673,13 +1695,6 @@ export default function Editor() {
                             onClick={() => chooseShapeTool(value)}
                           >
                             <Icon /> {label}
-                            <MenubarShortcut>
-                              {formatEditorShortcut(
-                                EDITOR_SHORTCUTS[
-                                  `${value}Tool` as keyof typeof EDITOR_SHORTCUTS
-                                ]
-                              )}
-                            </MenubarShortcut>
                           </MenubarItem>
                         )
                       )}

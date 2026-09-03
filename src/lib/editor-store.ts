@@ -12,6 +12,7 @@ import type {
   EditorLayer,
   EditorPage,
   ImageLayer,
+  ShapeKind,
   ShapeLayer,
   TextLayer,
 } from "@/types/editor"
@@ -51,6 +52,12 @@ type EditorState = {
   drawingTool: DrawingTool | null
   brushColor: string
   brushWidth: number
+  shapeKind: ShapeKind
+  shapeFill: string
+  shapeFillEnabled: boolean
+  shapeStroke: string
+  shapeStrokeEnabled: boolean
+  shapeStrokeWidth: number
   setDocument: (document: EditorDocument) => void
   resetDocument: () => void
   selectPage: (pageId: string) => void
@@ -58,6 +65,12 @@ type EditorState = {
   setDrawingTool: (tool: DrawingTool | null) => void
   setBrushColor: (color: string) => void
   setBrushWidth: (width: number) => void
+  setShapeKind: (shape: ShapeKind) => void
+  setShapeFill: (color: string) => void
+  setShapeFillEnabled: (enabled: boolean) => void
+  setShapeStroke: (color: string) => void
+  setShapeStrokeEnabled: (enabled: boolean) => void
+  setShapeStrokeWidth: (width: number) => void
   appendPages: (pages: EditorPage[]) => void
   addBlankPage: () => void
   deletePage: (pageId: string) => void
@@ -90,6 +103,12 @@ export const useEditorStore = create<EditorState>()(
       drawingTool: null,
       brushColor: "#26241F",
       brushWidth: 6,
+      shapeKind: "rectangle",
+      shapeFill: "#FFFFFF",
+      shapeFillEnabled: false,
+      shapeStroke: "#26241F",
+      shapeStrokeEnabled: true,
+      shapeStrokeWidth: 1.5,
       setDocument: (document) =>
         set((state) => {
           state.document = document
@@ -125,6 +144,31 @@ export const useEditorStore = create<EditorState>()(
         set((state) => {
           if (!Number.isFinite(width)) return
           state.brushWidth = Math.min(144, Math.max(0.5, width))
+        }),
+      setShapeKind: (shape) =>
+        set((state) => {
+          state.shapeKind = shape
+        }),
+      setShapeFill: (color) =>
+        set((state) => {
+          state.shapeFill = color
+        }),
+      setShapeFillEnabled: (enabled) =>
+        set((state) => {
+          state.shapeFillEnabled = enabled
+        }),
+      setShapeStroke: (color) =>
+        set((state) => {
+          state.shapeStroke = color
+        }),
+      setShapeStrokeEnabled: (enabled) =>
+        set((state) => {
+          state.shapeStrokeEnabled = enabled
+        }),
+      setShapeStrokeWidth: (width) =>
+        set((state) => {
+          if (!Number.isFinite(width)) return
+          state.shapeStrokeWidth = Math.min(72, Math.max(0.25, width))
         }),
       appendPages: (pages) =>
         set((state) => {

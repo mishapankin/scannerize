@@ -20,8 +20,9 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 - Undo and redo document edits.
 - Use platform-aware application shortcuts: menus show Command on macOS and
   Control on Windows and Linux from the same shortcut definitions.
-- Switch between Select (`V`), Pan (`H`), drag-to-zoom (`Z`), Brush (`B`), Rectangle (`R`),
-  Ellipse (`O`), Line (`L`), Arrow (`A`), and Polygon (`P`) tools. Trackpad
+- Switch between Select (`V`), Pan (`H`), drag-to-zoom (`Z`), Brush (`B`), and
+  the remembered Shape tool (`U`). Cycle Rectangle, Ellipse, Line, Arrow, and
+  Polygon with `Shift+U`. Trackpad
   panning, pinch zoom, Space-drag, and middle-button panning remain available
   while selecting.
 - Export at 96, 150, or 300 DPI, preserve untouched source pages, and keep,

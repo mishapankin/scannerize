@@ -10,11 +10,8 @@ export const EDITOR_SHORTCUTS = {
   panTool: "H",
   zoomTool: "Z",
   brushTool: "B",
-  rectangleTool: "R",
-  ellipseTool: "O",
-  lineTool: "L",
-  arrowTool: "A",
-  polygonTool: "P",
+  shapeTool: "U",
+  cycleShapeTool: "Shift+U",
 } as const satisfies Record<string, Hotkey>
 
 type ShortcutPlatform = "mac" | "windows" | "linux"

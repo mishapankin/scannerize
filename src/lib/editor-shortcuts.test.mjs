@@ -30,17 +30,14 @@ test("editing shortcuts keep conventional cross-platform bindings", () => {
 })
 
 test("tool shortcuts display consistently on every platform", () => {
+  assert.equal(formatEditorShortcut(EDITOR_SHORTCUTS.shapeTool, "mac"), "U")
   assert.equal(
-    formatEditorShortcut(EDITOR_SHORTCUTS.rectangleTool, "mac"),
-    "R"
+    formatEditorShortcut(EDITOR_SHORTCUTS.cycleShapeTool, "windows"),
+    "Shift+U"
   )
   assert.equal(
-    formatEditorShortcut(EDITOR_SHORTCUTS.rectangleTool, "windows"),
-    "R"
-  )
-  assert.equal(
-    formatEditorShortcut(EDITOR_SHORTCUTS.rectangleTool, "linux"),
-    "R"
+    formatEditorShortcut(EDITOR_SHORTCUTS.cycleShapeTool, "linux"),
+    "Shift+U"
   )
   assert.equal(formatEditorShortcut(EDITOR_SHORTCUTS.brushTool, "mac"), "B")
 })

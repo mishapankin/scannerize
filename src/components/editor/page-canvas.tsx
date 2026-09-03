@@ -11,6 +11,7 @@ import Konva from "konva"
 import { useHotkeys } from "@tanstack/react-hotkeys"
 import {
   BrushIcon,
+  ChevronDownIcon,
   CircleIcon,
   HandIcon,
   MoveUpRightIcon,
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -62,7 +64,10 @@ import {
   getScaledBrushPoints,
   type BrushPoint,
 } from "@/lib/brush-geometry"
-import { EDITOR_SHORTCUTS } from "@/lib/editor-shortcuts"
+import {
+  EDITOR_SHORTCUTS,
+  formatEditorShortcut,
+} from "@/lib/editor-shortcuts"
 import { useEditorStore } from "@/lib/editor-store"
 import { renderPageBackground } from "@/lib/pdf-engine"
 import {
@@ -138,24 +143,16 @@ const ALL_RESIZE_ANCHORS = [
 ]
 const HORIZONTAL_RESIZE_ANCHORS = ["middle-left", "middle-right"]
 const SHAPE_TOOLS = [
-  { value: "rectangle", label: "Rectangle · R", icon: SquareIcon },
-  { value: "ellipse", label: "Ellipse · O", icon: CircleIcon },
-  { value: "line", label: "Line · L", icon: MinusIcon },
-  { value: "arrow", label: "Arrow · A", icon: MoveUpRightIcon },
-  { value: "polygon", label: "Polygon · P", icon: PentagonIcon },
+  { value: "rectangle", label: "Rectangle", icon: SquareIcon },
+  { value: "ellipse", label: "Ellipse", icon: CircleIcon },
+  { value: "line", label: "Line", icon: MinusIcon },
+  { value: "arrow", label: "Arrow", icon: MoveUpRightIcon },
+  { value: "polygon", label: "Polygon", icon: PentagonIcon },
 ] as const satisfies ReadonlyArray<{
   value: ShapeKind
   label: string
   icon: typeof SquareIcon
 }>
-
-const DEFAULT_SHAPE_STYLE = {
-  fill: "#FFFFFF",
-  fillEnabled: false,
-  stroke: "#26241F",
-  strokeEnabled: true,
-  strokeWidth: 1.5,
-} as const
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value)
@@ -514,6 +511,26 @@ export function PageCanvas({
   const brushWidth = useEditorStore((state) => state.brushWidth)
   const setBrushColor = useEditorStore((state) => state.setBrushColor)
   const setBrushWidth = useEditorStore((state) => state.setBrushWidth)
+  const shapeKind = useEditorStore((state) => state.shapeKind)
+  const shapeFill = useEditorStore((state) => state.shapeFill)
+  const shapeFillEnabled = useEditorStore((state) => state.shapeFillEnabled)
+  const shapeStroke = useEditorStore((state) => state.shapeStroke)
+  const shapeStrokeEnabled = useEditorStore(
+    (state) => state.shapeStrokeEnabled
+  )
+  const shapeStrokeWidth = useEditorStore((state) => state.shapeStrokeWidth)
+  const setShapeKind = useEditorStore((state) => state.setShapeKind)
+  const setShapeFill = useEditorStore((state) => state.setShapeFill)
+  const setShapeFillEnabled = useEditorStore(
+    (state) => state.setShapeFillEnabled
+  )
+  const setShapeStroke = useEditorStore((state) => state.setShapeStroke)
+  const setShapeStrokeEnabled = useEditorStore(
+    (state) => state.setShapeStrokeEnabled
+  )
+  const setShapeStrokeWidth = useEditorStore(
+    (state) => state.setShapeStrokeWidth
+  )
   const transformerRef = useRef<Konva.Transformer>(null)
   const nodeRefs = useRef(new Map<string, Konva.Node>())
   const panStartRef = useRef<{
@@ -612,14 +629,23 @@ export function PageCanvas({
         opacity: 1,
         visible: true,
         locked: false,
-        ...DEFAULT_SHAPE_STYLE,
+        fill: shapeFill,
+        fillEnabled: shapeFillEnabled,
+        stroke: shapeStroke,
+        strokeEnabled: shapeStrokeEnabled,
+        strokeWidth: shapeStrokeWidth,
       }
       addLayer(page.id, layer)
-      setDrawingTool(null)
-      setTool("select")
-      onEditLayer?.(layer.id)
     },
-    [addLayer, onEditLayer, page.id, setDrawingTool]
+    [
+      addLayer,
+      page.id,
+      shapeFill,
+      shapeFillEnabled,
+      shapeStroke,
+      shapeStrokeEnabled,
+      shapeStrokeWidth,
+    ]
   )
 
   const completePolygon = useCallback(() => {
@@ -840,21 +866,26 @@ export function PageCanvas({
           setDrawingTool("brush")
         },
       },
-      ...(
-        [
-          [EDITOR_SHORTCUTS.rectangleTool, "rectangle"],
-          [EDITOR_SHORTCUTS.ellipseTool, "ellipse"],
-          [EDITOR_SHORTCUTS.lineTool, "line"],
-          [EDITOR_SHORTCUTS.arrowTool, "arrow"],
-          [EDITOR_SHORTCUTS.polygonTool, "polygon"],
-        ] as const
-      ).map(([hotkey, shape]) => ({
-        hotkey,
+      {
+        hotkey: EDITOR_SHORTCUTS.shapeTool,
         callback: () => {
           setTool("select")
-          setDrawingTool(shape)
+          setDrawingTool(shapeKind)
         },
-      })),
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.cycleShapeTool,
+        callback: () => {
+          const currentIndex = SHAPE_TOOLS.findIndex(
+            ({ value }) => value === shapeKind
+          )
+          const nextShape =
+            SHAPE_TOOLS[(currentIndex + 1) % SHAPE_TOOLS.length].value
+          setShapeKind(nextShape)
+          setTool("select")
+          setDrawingTool(nextShape)
+        },
+      },
     ],
     {
       ignoreInputs: true,
@@ -968,9 +999,10 @@ export function PageCanvas({
     ...(polygonPointer && polygonPoints.length ? [polygonPointer] : []),
   ].flatMap((point) => [point.x, point.y])
   const brushDraftPoints = brushDraft.flatMap((point) => [point.x, point.y])
-  const activeShapeTool = drawingTool === "brush" ? null : drawingTool
   const ActiveShapeIcon =
-    SHAPE_TOOLS.find((shape) => shape.value === activeShapeTool)?.icon ?? SquareIcon
+    SHAPE_TOOLS.find((shape) => shape.value === shapeKind)?.icon ?? SquareIcon
+  const shapeToolActive = drawingTool !== null && drawingTool !== "brush"
+  const shapeSupportsFill = shapeKind !== "line" && shapeKind !== "arrow"
 
   return (
     <div
@@ -1513,44 +1545,74 @@ export function PageCanvas({
           />
           <TooltipContent>Brush · B</TooltipContent>
         </Tooltip>
-        <DropdownMenu>
+        <div className="flex items-center gap-0">
           <Tooltip>
             <TooltipTrigger
               render={
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className={cn(
-                        activeShapeTool && "bg-accent text-accent-foreground"
-                      )}
-                      aria-label="Shape tools"
-                    />
-                  }
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(
+                    shapeToolActive && "bg-accent text-accent-foreground"
+                  )}
+                  aria-label={`${SHAPE_TOOLS.find(({ value }) => value === shapeKind)?.label ?? "Shape"} · U`}
+                  onClick={() => {
+                    setTool("select")
+                    setDrawingTool(shapeKind)
+                  }}
                 />
               }
             >
               <ActiveShapeIcon />
             </TooltipTrigger>
-            <TooltipContent>Shape tools</TooltipContent>
+            <TooltipContent>
+              {SHAPE_TOOLS.find(({ value }) => value === shapeKind)?.label} · U
+            </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent side="top" align="start">
-            <DropdownMenuGroup>
-              {SHAPE_TOOLS.map(({ value, label, icon: Icon }) => (
-                <DropdownMenuItem
-                  key={value}
-                  onClick={() => {
-                    setTool("select")
-                    setDrawingTool(value)
-                  }}
-                >
-                  <Icon /> {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className={cn(
+                          shapeToolActive &&
+                            "bg-accent text-accent-foreground"
+                        )}
+                        aria-label="Choose shape"
+                      />
+                    }
+                  />
+                }
+              >
+                <ChevronDownIcon />
+              </TooltipTrigger>
+              <TooltipContent>
+                Choose shape ·{" "}
+                {formatEditorShortcut(EDITOR_SHORTCUTS.cycleShapeTool)}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent side="top" align="start">
+              <DropdownMenuGroup>
+                {SHAPE_TOOLS.map(({ value, label, icon: Icon }) => (
+                  <DropdownMenuItem
+                    key={value}
+                    onClick={() => {
+                      setShapeKind(value)
+                      setTool("select")
+                      setDrawingTool(value)
+                    }}
+                  >
+                    <Icon /> {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <Separator orientation="vertical" />
         <CanvasControl
           label="Zoom out · −"
@@ -1622,22 +1684,86 @@ export function PageCanvas({
         </div>
       )}
 
-      {drawingTool === "polygon" && polygonPoints.length > 0 && (
+      {shapeToolActive && (
         <div
           className="drawing-tool-controls"
           role="toolbar"
-          aria-label="Polygon drawing"
+          aria-label="Shape settings"
         >
-          <Button variant="ghost" size="sm" onClick={cancelDrawing}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            disabled={polygonPoints.length < 3}
-            onClick={completePolygon}
-          >
-            Done
-          </Button>
+          <span className="px-1 text-xs text-muted-foreground">Fill</span>
+          <Switch
+            checked={shapeFillEnabled}
+            disabled={!shapeSupportsFill}
+            onCheckedChange={setShapeFillEnabled}
+            aria-label="Enable fill"
+          />
+          <ColorPicker
+            value={shapeFill}
+            label="Fill color"
+            disabled={!shapeSupportsFill || !shapeFillEnabled}
+            onValueChange={setShapeFill}
+            onValueChangeEnd={() => undefined}
+          />
+          <Separator orientation="vertical" />
+          <span className="px-1 text-xs text-muted-foreground">Stroke</span>
+          <Switch
+            checked={shapeStrokeEnabled}
+            onCheckedChange={setShapeStrokeEnabled}
+            aria-label="Enable stroke"
+          />
+          <ColorPicker
+            value={shapeStroke}
+            label="Stroke color"
+            disabled={!shapeStrokeEnabled}
+            onValueChange={setShapeStroke}
+            onValueChangeEnd={() => undefined}
+          />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Input
+                  type="number"
+                  min={0.25}
+                  max={72}
+                  step={0.25}
+                  value={shapeStrokeWidth}
+                  disabled={!shapeStrokeEnabled}
+                  className="h-8 w-16"
+                  aria-label="Stroke width"
+                  onChange={(event) =>
+                    setShapeStrokeWidth(Number(event.target.value))
+                  }
+                />
+              }
+            />
+            <TooltipContent>Stroke width</TooltipContent>
+          </Tooltip>
+          <Separator orientation="vertical" />
+          {drawingTool === "polygon" && polygonPoints.length > 0 ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPolygonPoints([])
+                  setPolygonPointer(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={polygonPoints.length < 3}
+                onClick={completePolygon}
+              >
+                Finish
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={cancelDrawing}>
+              Done
+            </Button>
+          )}
         </div>
       )}
     </div>
