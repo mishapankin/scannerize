@@ -13,14 +13,17 @@ import {
   BrushIcon,
   ChevronDownIcon,
   CircleIcon,
+  CopyIcon,
   HandIcon,
   MoveUpRightIcon,
   MinusIcon,
   MousePointer2Icon,
+  PencilIcon,
   PentagonIcon,
   PlusIcon,
   SearchIcon,
   SquareIcon,
+  Trash2Icon,
 } from "lucide-react"
 import {
   Arrow as KonvaArrow,
@@ -38,6 +41,14 @@ import {
 
 import { ColorPicker } from "@/components/editor/color-picker"
 import { Button } from "@/components/ui/button"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -505,6 +516,10 @@ export function PageCanvas({
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const selectLayer = useEditorStore((state) => state.selectLayer)
   const addLayer = useEditorStore((state) => state.addLayer)
+  const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
+  const deleteLayer = useEditorStore((state) => state.deleteLayer)
+  const setRenamingLayer = useEditorStore((state) => state.setRenamingLayer)
+  const [contextLayerId, setContextLayerId] = useState<string | null>(null)
   const drawingTool = useEditorStore((state) => state.drawingTool)
   const setDrawingTool = useEditorStore((state) => state.setDrawingTool)
   const setDrawingGestureActive = useEditorStore(
@@ -1023,6 +1038,7 @@ export function PageCanvas({
   }, [page.layers, selectedLayerId])
 
   const selectedLayer = page.layers.find((layer) => layer.id === selectedLayerId)
+  const contextLayer = page.layers.find((layer) => layer.id === contextLayerId)
   const objectInteractionEnabled =
     tool === "select" &&
     !drawingTool &&
@@ -1077,10 +1093,39 @@ export function PageCanvas({
       }
       style={{ touchAction: "none" }}
     >
-      <Stage
+      <ContextMenu>
+        <ContextMenuTrigger className="size-full">
+          <Stage
         width={width}
         height={height}
-        onContextMenu={(event) => event.evt.preventDefault()}
+        onContextMenu={(event) => {
+          const stage = event.target.getStage()
+          let node: Konva.Node | null = event.target
+          let targetLayerId: string | null = null
+
+          while (node && node !== stage) {
+            const nodeId = node.id()
+            if (page.layers.some((layer) => layer.id === nodeId)) {
+              targetLayerId = nodeId
+              break
+            }
+            if (node === transformerRef.current) {
+              targetLayerId = selectedLayerId
+              break
+            }
+            node = node.getParent()
+          }
+
+          if (!targetLayerId) {
+            event.evt.preventDefault()
+            event.evt.stopPropagation()
+            setContextLayerId(null)
+            return
+          }
+
+          selectLayer(targetLayerId)
+          setContextLayerId(targetLayerId)
+        }}
         onWheel={(event) => {
           event.evt.preventDefault()
           const delta = getWheelDelta(event.evt, height)
@@ -1558,7 +1603,37 @@ export function PageCanvas({
             )}
           </Group>
         </KonvaLayer>
-      </Stage>
+          </Stage>
+        </ContextMenuTrigger>
+        {contextLayer && (
+          <ContextMenuContent>
+            <ContextMenuGroup>
+              <ContextMenuItem
+                onClick={() => {
+                  selectLayer(contextLayer.id)
+                  setRenamingLayer(contextLayer.id)
+                }}
+              >
+                <PencilIcon /> Rename
+              </ContextMenuItem>
+              <ContextMenuItem
+                onClick={() => duplicateLayer(page.id, contextLayer.id)}
+              >
+                <CopyIcon /> Duplicate
+              </ContextMenuItem>
+            </ContextMenuGroup>
+            <ContextMenuSeparator />
+            <ContextMenuGroup>
+              <ContextMenuItem
+                variant="destructive"
+                onClick={() => deleteLayer(page.id, contextLayer.id)}
+              >
+                <Trash2Icon /> Delete
+              </ContextMenuItem>
+            </ContextMenuGroup>
+          </ContextMenuContent>
+        )}
+      </ContextMenu>
 
       {showControls && (
         <div className="canvas-controls" role="toolbar" aria-label="Canvas view">
