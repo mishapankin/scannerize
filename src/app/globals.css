@@ -142,7 +142,7 @@
     @apply absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background/95 p-1 text-foreground;
   }
 
-  .polygon-drawing-controls {
+  .drawing-tool-controls {
     @apply absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-lg border bg-background/95 p-1 text-foreground;
   }
 

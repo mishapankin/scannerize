@@ -42,4 +42,5 @@ test("tool shortcuts display consistently on every platform", () => {
     formatEditorShortcut(EDITOR_SHORTCUTS.rectangleTool, "linux"),
     "R"
   )
+  assert.equal(formatEditorShortcut(EDITOR_SHORTCUTS.brushTool, "mac"), "B")
 })

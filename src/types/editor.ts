@@ -42,6 +42,7 @@ export type TextLayer = LayerBase & {
 }
 
 export type ShapeKind = "rectangle" | "ellipse" | "line" | "arrow" | "polygon"
+export type DrawingTool = ShapeKind | "brush"
 
 export type ShapeLayer = LayerBase & {
   type: "shape"
@@ -54,7 +55,14 @@ export type ShapeLayer = LayerBase & {
   strokeWidth: number
 }
 
-export type EditorLayer = ImageLayer | TextLayer | ShapeLayer
+export type BrushLayer = LayerBase & {
+  type: "brush"
+  points: number[]
+  color: string
+  strokeWidth: number
+}
+
+export type EditorLayer = ImageLayer | TextLayer | ShapeLayer | BrushLayer
 
 export type EditorPage = {
   id: string

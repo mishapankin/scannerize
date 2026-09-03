@@ -117,6 +117,9 @@ function isRenderableLayer(layer: EditorPage["layers"][number]) {
   if (!layer.visible || layer.opacity <= 0) return false
   if (layer.type === "image") return true
   if (layer.type === "text") return layer.value.length > 0
+  if (layer.type === "brush") {
+    return layer.points.length >= 2 && layer.strokeWidth > 0
+  }
   const fillEnabled = layer.fillEnabled ?? Boolean(layer.fill)
   const strokeEnabled = layer.strokeEnabled ?? Boolean(layer.stroke)
   return Boolean(

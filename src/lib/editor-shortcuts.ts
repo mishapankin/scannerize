@@ -9,6 +9,7 @@ export const EDITOR_SHORTCUTS = {
   selectTool: "V",
   panTool: "H",
   zoomTool: "Z",
+  brushTool: "B",
   rectangleTool: "R",
   ellipseTool: "O",
   lineTool: "L",

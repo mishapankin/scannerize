@@ -21,6 +21,7 @@ import {
   AlignCenterIcon,
   AlignLeftIcon,
   AlignRightIcon,
+  BrushIcon,
   CircleIcon,
   CopyIcon,
   DownloadIcon,
@@ -529,6 +530,7 @@ function PageRail({
 function LayerTypeIcon({ layer }: { layer: EditorLayer }) {
   if (layer.type === "image") return <FileImageIcon className="size-4" />
   if (layer.type === "text") return <TextCursorInputIcon className="size-4" />
+  if (layer.type === "brush") return <BrushIcon className="size-4" />
   const Icon =
     layer.shape === "rectangle"
       ? SquareIcon
@@ -710,6 +712,8 @@ function LayerRow({
 
 function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer }) {
   const updateLayer = useEditorStore((state) => state.updateLayer)
+  const setBrushColor = useEditorStore((state) => state.setBrushColor)
+  const setBrushWidth = useEditorStore((state) => state.setBrushWidth)
   const colorGestureActiveRef = useRef(false)
   const shapeFillEnabled =
     layer.type === "shape" && isShapeFillEnabled(layer)
@@ -725,9 +729,17 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
     []
   )
 
-  const updateColor = (property: "fill" | "stroke", value: string) => {
+  const updateColor = (
+    property: "fill" | "stroke" | "color",
+    value: string
+  ) => {
     if (property === "fill") updateLayer(page.id, layer.id, { fill: value })
-    else updateLayer(page.id, layer.id, { stroke: value })
+    else if (property === "stroke") {
+      updateLayer(page.id, layer.id, { stroke: value })
+    } else {
+      updateLayer(page.id, layer.id, { color: value })
+      setBrushColor(value)
+    }
 
     if (!colorGestureActiveRef.current) {
       colorGestureActiveRef.current = true
@@ -959,6 +971,40 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
                     ),
                   })
                 }
+              />
+            </Field>
+          </>
+        )}
+
+        {layer.type === "brush" && (
+          <>
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="brush-color">Color</FieldLabel>
+              <ColorPicker
+                id="brush-color"
+                value={layer.color}
+                label="Brush color"
+                onValueChange={(value) => updateColor("color", value)}
+                onValueChangeEnd={finishColorGesture}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="brush-width">Size</FieldLabel>
+              <Input
+                id="brush-width"
+                type="number"
+                min={0.5}
+                max={144}
+                step={0.5}
+                value={layer.strokeWidth}
+                onChange={(event) => {
+                  const strokeWidth = Math.min(
+                    144,
+                    Math.max(0.5, Number(event.target.value))
+                  )
+                  updateLayer(page.id, layer.id, { strokeWidth })
+                  setBrushWidth(strokeWidth)
+                }}
               />
             </Field>
           </>
@@ -1368,6 +1414,11 @@ export default function Editor() {
     setDrawingTool(shape)
   }
 
+  function chooseBrushTool() {
+    ensurePage()
+    setDrawingTool("brush")
+  }
+
   async function addImageFile(file: File) {
     setBusy(true)
     setError(null)
@@ -1602,6 +1653,12 @@ export default function Editor() {
                 </MenubarItem>
                 <MenubarItem disabled={restoring} onClick={addText}>
                   <TextCursorInputIcon /> Text
+                </MenubarItem>
+                <MenubarItem disabled={restoring} onClick={chooseBrushTool}>
+                  <BrushIcon /> Brush
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.brushTool)}
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarSub>
                   <MenubarSubTrigger disabled={restoring}>
@@ -1883,7 +1940,17 @@ export default function Editor() {
         title="Insert"
       >
         <div className="flex flex-col gap-4 py-3">
-          <MobileActionGroup label="Shape">
+          <MobileActionGroup label="Draw">
+            <MobileAction
+              icon={BrushIcon}
+              disabled={restoring}
+              onClick={() => {
+                setMobileDrawer(null)
+                chooseBrushTool()
+              }}
+            >
+              Brush
+            </MobileAction>
             {SHAPE_INSERT_ACTIONS.map(({ value, label, icon }) => (
               <MobileAction
                 key={value}
@@ -2033,11 +2100,11 @@ export default function Editor() {
 
             <MobileActionGroup label="Insert">
               <MobileAction
-                icon={SquareIcon}
+                icon={BrushIcon}
                 disabled={restoring}
                 onClick={() => setMobileDrawer("insert")}
               >
-                Shapes
+                Draw
               </MobileAction>
               <MobileAction
                 icon={ImagePlusIcon}

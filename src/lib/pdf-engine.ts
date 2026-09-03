@@ -2,6 +2,7 @@ import { PDFDocument } from "pdf-lib"
 import type { PDFDocumentProxy } from "pdfjs-dist"
 
 import { getImageAsset } from "@/lib/asset-registry"
+import { getScaledBrushPoints } from "@/lib/brush-geometry"
 import {
   buildExportPlan,
   type ExportPagePlan,
@@ -13,7 +14,12 @@ import {
   isShapeFillEnabled,
   isShapeStrokeEnabled,
 } from "@/lib/shape-geometry"
-import type { EditorLayer, EditorPage, ShapeLayer } from "@/types/editor"
+import type {
+  BrushLayer,
+  EditorLayer,
+  EditorPage,
+  ShapeLayer,
+} from "@/types/editor"
 
 type PdfSource = {
   id: string
@@ -236,6 +242,34 @@ function drawShapeLayer(
   }
 }
 
+function drawBrushLayer(
+  context: CanvasRenderingContext2D,
+  layer: BrushLayer
+) {
+  const points = getScaledBrushPoints(layer)
+  if (points.length < 2) return
+
+  context.fillStyle = layer.color
+  context.strokeStyle = layer.color
+  context.lineWidth = layer.strokeWidth
+  context.lineCap = "round"
+  context.lineJoin = "round"
+
+  if (points.length === 2) {
+    context.beginPath()
+    context.arc(points[0], points[1], layer.strokeWidth / 2, 0, Math.PI * 2)
+    context.fill()
+    return
+  }
+
+  context.beginPath()
+  context.moveTo(points[0], points[1])
+  for (let index = 2; index < points.length; index += 2) {
+    context.lineTo(points[index], points[index + 1])
+  }
+  context.stroke()
+}
+
 function drawLayer(context: CanvasRenderingContext2D, layer: EditorLayer) {
   if (!layer.visible) return
 
@@ -251,8 +285,10 @@ function drawLayer(context: CanvasRenderingContext2D, layer: EditorLayer) {
     }
   } else if (layer.type === "text") {
     drawTextLayer(context, layer)
-  } else {
+  } else if (layer.type === "shape") {
     drawShapeLayer(context, layer)
+  } else {
+    drawBrushLayer(context, layer)
   }
 
   context.restore()

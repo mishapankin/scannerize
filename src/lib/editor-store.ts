@@ -6,12 +6,13 @@ import { immer } from "zustand/middleware/immer"
 
 import { measureTextLayer } from "@/lib/text-layout"
 import type {
+  BrushLayer,
+  DrawingTool,
   EditorDocument,
   EditorLayer,
   EditorPage,
   ImageLayer,
   ShapeLayer,
-  ShapeKind,
   TextLayer,
 } from "@/types/editor"
 
@@ -33,7 +34,9 @@ function createBlankPage(index: number): EditorPage {
 function cloneLayer(layer: EditorLayer): EditorLayer {
   return {
     ...layer,
-    ...(layer.type === "shape" ? { points: [...layer.points] } : {}),
+    ...(layer.type === "shape" || layer.type === "brush"
+      ? { points: [...layer.points] }
+      : {}),
     id: crypto.randomUUID(),
     name: `${layer.name} copy`,
     x: layer.x + 12,
@@ -45,12 +48,16 @@ type EditorState = {
   document: EditorDocument | null
   selectedPageId: string | null
   selectedLayerId: string | null
-  drawingTool: ShapeKind | null
+  drawingTool: DrawingTool | null
+  brushColor: string
+  brushWidth: number
   setDocument: (document: EditorDocument) => void
   resetDocument: () => void
   selectPage: (pageId: string) => void
   selectLayer: (layerId: string | null) => void
-  setDrawingTool: (tool: ShapeKind | null) => void
+  setDrawingTool: (tool: DrawingTool | null) => void
+  setBrushColor: (color: string) => void
+  setBrushWidth: (width: number) => void
   appendPages: (pages: EditorPage[]) => void
   addBlankPage: () => void
   deletePage: (pageId: string) => void
@@ -61,7 +68,11 @@ type EditorState = {
   updateLayer: (
     pageId: string,
     layerId: string,
-    patch: Partial<ImageLayer> | Partial<TextLayer> | Partial<ShapeLayer>
+    patch:
+      | Partial<ImageLayer>
+      | Partial<TextLayer>
+      | Partial<ShapeLayer>
+      | Partial<BrushLayer>
   ) => void
   deleteLayer: (pageId: string, layerId: string) => void
   duplicateLayer: (pageId: string, layerId: string) => void
@@ -77,6 +88,8 @@ export const useEditorStore = create<EditorState>()(
       selectedPageId: null,
       selectedLayerId: null,
       drawingTool: null,
+      brushColor: "#26241F",
+      brushWidth: 6,
       setDocument: (document) =>
         set((state) => {
           state.document = document
@@ -103,6 +116,15 @@ export const useEditorStore = create<EditorState>()(
       setDrawingTool: (tool) =>
         set((state) => {
           state.drawingTool = tool
+        }),
+      setBrushColor: (color) =>
+        set((state) => {
+          state.brushColor = color
+        }),
+      setBrushWidth: (width) =>
+        set((state) => {
+          if (!Number.isFinite(width)) return
+          state.brushWidth = Math.min(144, Math.max(0.5, width))
         }),
       appendPages: (pages) =>
         set((state) => {
@@ -170,7 +192,9 @@ export const useEditorStore = create<EditorState>()(
             background: { ...source.background },
             layers: source.layers.map((layer) => ({
               ...layer,
-              ...(layer.type === "shape" ? { points: [...layer.points] } : {}),
+              ...(layer.type === "shape" || layer.type === "brush"
+                ? { points: [...layer.points] }
+                : {}),
               id: crypto.randomUUID(),
             })),
           }
@@ -247,6 +271,7 @@ export const useEditorStore = create<EditorState>()(
     {
       limit: 80,
       partialize: (state): HistorySlice => ({ document: state.document }),
+      equality: (past, current) => past.document === current.document,
     }
   )
 )

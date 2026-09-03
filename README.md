@@ -1,15 +1,18 @@
 # Scannerize
 
-Scannerize is a browser-only editor for final-stage PDF changes. It imports local PDFs as page backgrounds, places editable image, text, and vector-shape layers over them, manages pages in a filmstrip, and downloads a finished PDF. Document bytes never leave the browser.
+Scannerize is a browser-only editor for final-stage PDF changes. It imports local PDFs as page backgrounds, places editable image, text, shape, and brush layers over them, manages pages in a filmstrip, and downloads a finished PDF. Document bytes never leave the browser.
 
 ## Features
 
 - Import a PDF or drop it onto the editor; dropping another PDF appends its pages.
-- Add, move, resize, rotate, reorder, hide, lock, duplicate, and delete image, text, or vector-shape layers.
+- Add, move, resize, rotate, reorder, hide, lock, duplicate, and delete image,
+  text, shape, or brush layers.
 - Draw rectangles, ellipses, lines, arrows, and polygons with editable fill,
   stroke, stroke width, and opacity. Disabling fill or stroke retains its last
   color and width. Hold Shift to constrain proportions or angles, and Alt to
   draw rectangles and ellipses from their center.
+- Draw freehand brush strokes with color and size retained between strokes;
+  every completed stroke is an editable layer and one undoable action.
 - Edit text content, font, size, weight, alignment, color, opacity, line height,
   and Figma-style auto-width, auto-height, or fixed-size frames.
 - Add blank A4 pages; duplicate, rotate, reorder, and delete pages.
@@ -17,7 +20,7 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
 - Undo and redo document edits.
 - Use platform-aware application shortcuts: menus show Command on macOS and
   Control on Windows and Linux from the same shortcut definitions.
-- Switch between Select (`V`), Pan (`H`), drag-to-zoom (`Z`), Rectangle (`R`),
+- Switch between Select (`V`), Pan (`H`), drag-to-zoom (`Z`), Brush (`B`), Rectangle (`R`),
   Ellipse (`O`), Line (`L`), Arrow (`A`), and Polygon (`P`) tools. Trackpad
   panning, pinch zoom, Space-drag, and middle-button panning remain available
   while selecting.
@@ -70,7 +73,7 @@ Next.js uses `output: "export"` and produces a deployable `out/` directory. Ther
 - Workbox generates `out/sw.js` after the static build and precaches the application shell.
 - Manrope Variable and Source Serif 4 Variable are bundled locally.
 
-Page and layer geometry is stored in PDF points, independent of screen zoom and export DPI. Shape paths use normalized local coordinates, so canvas transforms, thumbnails, persistence, and high-DPI export share the same geometry. PDF.js proxies, decoded images, object URLs, and canvases stay in disposable runtime registries rather than editor history.
+Page and layer geometry is stored in PDF points, independent of screen zoom and export DPI. Shape and brush paths use normalized local coordinates, so canvas transforms, thumbnails, persistence, and high-DPI export share the same geometry. PDF.js proxies, decoded images, object URLs, and canvases stay in disposable runtime registries rather than editor history.
 
 Autosave writes each serializable document after completed edits and stores each
 source PDF or image once by stable ID. The document ID is encoded in the URL
@@ -119,7 +122,7 @@ pnpm build
 
 - Narrow screens use a canvas-first mobile layout with touch-sized controls and full-viewport drawers; desktop and tablet landscape retain the three-pane layout.
 - Text is edited in the properties panel rather than directly on the canvas.
-- Freehand brush drawing and per-vertex polygon editing are not implemented yet.
+- Per-vertex polygon editing is not implemented yet.
 - Blank pages use A4 size.
 - Saved documents can be reopened by their document URL or as the most recently
   active document; there is not yet a recent-document browser or downloadable

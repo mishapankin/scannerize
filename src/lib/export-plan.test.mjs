@@ -152,4 +152,30 @@ test("only visible page content prevents direct preservation", () => {
     ),
     true
   )
+
+  assert.equal(
+    canPreserveOriginalPage(
+      page("brush", 595, 842, {
+        layers: [
+          {
+            id: "brush",
+            type: "brush",
+            name: "Brush",
+            x: 10,
+            y: 10,
+            width: 50,
+            height: 50,
+            rotation: 0,
+            opacity: 1,
+            visible: true,
+            locked: false,
+            points: [0.1, 0.1, 0.9, 0.9],
+            color: "#000000",
+            strokeWidth: 6,
+          },
+        ],
+      })
+    ),
+    false
+  )
 })
