@@ -3,22 +3,30 @@ import test from "node:test"
 
 import {
   EDITOR_SHORTCUTS,
+  formatDeleteShortcut,
   formatEditorShortcut,
 } from "./editor-shortcuts.ts"
 
 test("shortcut labels adapt to the operating system", () => {
   assert.equal(
     formatEditorShortcut(EDITOR_SHORTCUTS.appendPdf, "mac"),
-    "⌘ ⌥ ⇧ O"
+    "⌘ ⇧ O"
   )
   assert.equal(
     formatEditorShortcut(EDITOR_SHORTCUTS.appendPdf, "windows"),
-    "Ctrl+Alt+Shift+O"
+    "Ctrl+Shift+O"
   )
   assert.equal(
     formatEditorShortcut(EDITOR_SHORTCUTS.appendPdf, "linux"),
-    "Ctrl+Alt+Shift+O"
+    "Ctrl+Shift+O"
   )
+})
+
+test("delete shortcuts use the key available on each platform", () => {
+  assert.equal(formatDeleteShortcut("layer", "mac"), "⌫")
+  assert.equal(formatDeleteShortcut("page", "mac"), "⇧ ⌫")
+  assert.equal(formatDeleteShortcut("layer", "windows"), "Del")
+  assert.equal(formatDeleteShortcut("page", "linux"), "Shift+Del")
 })
 
 test("editing shortcuts keep conventional cross-platform bindings", () => {

@@ -22,7 +22,7 @@ Scannerize is a browser-only editor for final-stage PDF changes. It imports loca
   Control on Windows and Linux from the same shortcut definitions.
 - Switch between Select (`V`), Pan (`H`), drag-to-zoom (`Z`), Brush (`B`), and
   the remembered Shape tool (`U`). Cycle Rectangle, Ellipse, Line, Arrow, and
-  Polygon with `Shift+U`. Trackpad
+  Polygon with `Shift+U`; use `T` to add text and `[`/`]` to change brush size. Trackpad
   panning, pinch zoom, Space-drag, and middle-button panning remain available
   while selecting.
 - Export at 96, 150, or 300 DPI, preserve untouched source pages, and keep,
@@ -46,6 +46,15 @@ includes Close document, which flushes autosave and releases that tab without
 deleting the saved document. The document name stays centered, while the
 Scannerize brand and menus sit on the left and history controls with the primary
 Export action remain on the right.
+
+Keyboard commands keep layer and page operations explicit: Delete removes the
+selected layer, while Shift+Delete removes the selected page after confirmation.
+`Mod+J` duplicates a layer and `Mod+Shift+J` duplicates a page. PageUp/PageDown
+navigate pages and their Shift variants reorder them. Photoshop-style layer
+selection and stacking use Alt+brackets and Mod+brackets; `F2` renames a layer.
+On macOS the menus display the keyboard's Backspace-style Delete glyph, while
+Windows and Linux display forward Delete. Clipboard shortcuts operate on layers,
+and `Mod+S` flushes the on-device autosave immediately.
 
 The interface uses shadcn/Base UI components installed through `shadcn add` and Lucide icons. It avoids dashboard-style cards: bordered containers are reserved for functional items such as page thumbnails, the paper surface, dialogs, and menus.
 

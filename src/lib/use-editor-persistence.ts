@@ -52,6 +52,7 @@ export function useEditorPersistence() {
     null
   )
   const closeHandlerRef = useRef<() => Promise<boolean>>(async () => false)
+  const saveHandlerRef = useRef<() => Promise<boolean>>(async () => false)
   const [status, setStatus] = useState<PersistenceStatus>("loading")
   const [error, setError] = useState<string | null>(null)
 
@@ -279,6 +280,23 @@ export function useEditorPersistence() {
       return true
     }
 
+    saveHandlerRef.current = async () => {
+      if (!activeWorkspace) return false
+      setStatus("saving")
+      try {
+        await switchQueue
+        await flushActive()
+        if (!cancelled) {
+          setStatus("saved")
+          setError(null)
+        }
+        return true
+      } catch (cause) {
+        reportError(cause)
+        return false
+      }
+    }
+
     void initialize()
     document.addEventListener("visibilitychange", onVisibilityChange)
     window.addEventListener("pagehide", flushOnExit)
@@ -290,11 +308,13 @@ export function useEditorPersistence() {
       unsubscribe?.()
       activeLease?.release()
       closeHandlerRef.current = async () => false
+      saveHandlerRef.current = async () => false
       document.removeEventListener("visibilitychange", onVisibilityChange)
       window.removeEventListener("pagehide", flushOnExit)
     }
   }, [])
 
   const closeDocument = useCallback(() => closeHandlerRef.current(), [])
-  return { status, error, closeDocument }
+  const saveDocument = useCallback(() => saveHandlerRef.current(), [])
+  return { status, error, closeDocument, saveDocument }
 }

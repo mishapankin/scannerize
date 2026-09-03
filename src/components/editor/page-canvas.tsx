@@ -507,6 +507,9 @@ export function PageCanvas({
   const addLayer = useEditorStore((state) => state.addLayer)
   const drawingTool = useEditorStore((state) => state.drawingTool)
   const setDrawingTool = useEditorStore((state) => state.setDrawingTool)
+  const setDrawingGestureActive = useEditorStore(
+    (state) => state.setDrawingGestureActive
+  )
   const brushColor = useEditorStore((state) => state.brushColor)
   const brushWidth = useEditorStore((state) => state.brushWidth)
   const setBrushColor = useEditorStore((state) => state.setBrushColor)
@@ -600,6 +603,16 @@ export function PageCanvas({
     setViewport(fitViewport())
   }, [fitViewport])
 
+  const resetToActualSize = useCallback(() => {
+    setViewport(
+      clampViewport({
+        x: width / 2 - page.widthPt / 2,
+        y: height / 2 - page.heightPt / 2,
+        scale: 1,
+      })
+    )
+  }, [clampViewport, height, page.heightPt, page.widthPt, width])
+
   const getPagePoint = useCallback(
     (pointer: ShapePoint): ShapePoint => ({
       x: Math.min(
@@ -654,7 +667,8 @@ export function PageCanvas({
     addShapeLayer("polygon", geometry)
     setPolygonPoints([])
     setPolygonPointer(null)
-  }, [addShapeLayer, polygonPoints])
+    setDrawingGestureActive(false)
+  }, [addShapeLayer, polygonPoints, setDrawingGestureActive])
 
   const completeBrushStroke = useCallback(() => {
     const geometry = getBrushGeometry(brushDraft, brushWidth)
@@ -673,16 +687,25 @@ export function PageCanvas({
     }
     addLayer(page.id, layer)
     setBrushDraft([])
-  }, [addLayer, brushColor, brushDraft, brushWidth, page.id])
+    setDrawingGestureActive(false)
+  }, [
+    addLayer,
+    brushColor,
+    brushDraft,
+    brushWidth,
+    page.id,
+    setDrawingGestureActive,
+  ])
 
   const cancelDrawing = useCallback(() => {
     setDragShapeDraft(null)
     setPolygonPoints([])
     setPolygonPointer(null)
     setBrushDraft([])
+    setDrawingGestureActive(false)
     setDrawingTool(null)
     setTool("select")
-  }, [setDrawingTool])
+  }, [setDrawingGestureActive, setDrawingTool])
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(resetView)
@@ -698,6 +721,10 @@ export function PageCanvas({
     })
     return () => window.cancelAnimationFrame(frame)
   }, [drawingTool, page.id])
+
+  useEffect(() => {
+    setDrawingGestureActive(false)
+  }, [page.id, setDrawingGestureActive])
 
   const zoomAt = useCallback(
     (point: { x: number; y: number }, factor: number) => {
@@ -791,19 +818,28 @@ export function PageCanvas({
         event.preventDefault()
         completePolygon()
       }
-      if (event.key === "Backspace" && drawingTool === "polygon") {
+      if (
+        event.key === "Backspace" &&
+        drawingTool === "polygon" &&
+        polygonPoints.length > 0
+      ) {
         event.preventDefault()
+        if (polygonPoints.length === 1) setDrawingGestureActive(false)
         setPolygonPoints((points) => points.slice(0, -1))
       }
-      if (event.key === "+" || event.key === "=") {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        (event.key === "+" || event.key === "=")
+      ) {
         event.preventDefault()
         zoomAt({ x: width / 2, y: height / 2 }, 1.2)
       }
-      if (event.key === "-") {
+      if (!event.metaKey && !event.ctrlKey && event.key === "-") {
         event.preventDefault()
         zoomAt({ x: width / 2, y: height / 2 }, 1 / 1.2)
       }
-      if (event.key === "0") {
+      if (!event.metaKey && !event.ctrlKey && event.key === "0") {
         event.preventDefault()
         resetView()
       }
@@ -830,7 +866,9 @@ export function PageCanvas({
     drawingTool,
     endPointerGesture,
     height,
+    polygonPoints.length,
     resetView,
+    setDrawingGestureActive,
     setDrawingTool,
     width,
     zoomAt,
@@ -885,6 +923,22 @@ export function PageCanvas({
           setTool("select")
           setDrawingTool(nextShape)
         },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.zoomIn,
+        callback: () => zoomAt({ x: width / 2, y: height / 2 }, 1.2),
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.zoomOut,
+        callback: () => zoomAt({ x: width / 2, y: height / 2 }, 1 / 1.2),
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.fitPage,
+        callback: resetView,
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.actualSize,
+        callback: resetToActualSize,
       },
     ],
     {
@@ -945,6 +999,7 @@ export function PageCanvas({
         fromCenter,
       })
       setDragShapeDraft(null)
+      setDrawingGestureActive(false)
       addShapeLayer(draft.shape, geometry)
     },
     [
@@ -953,6 +1008,7 @@ export function PageCanvas({
       getPagePoint,
       page.heightPt,
       page.widthPt,
+      setDrawingGestureActive,
       viewport.scale,
     ]
   )
@@ -1056,6 +1112,7 @@ export function PageCanvas({
           ) {
             event.evt.preventDefault()
             const pagePoint = getPagePoint(pointer)
+            setDrawingGestureActive(true)
             if (drawingTool === "brush") {
               setBrushDraft([pagePoint])
             } else if (drawingTool === "polygon") {
@@ -1174,6 +1231,7 @@ export function PageCanvas({
             event.evt.preventDefault()
             event.target.stopDrag()
             const pagePoint = getPagePoint(pointer)
+            setDrawingGestureActive(true)
             if (drawingTool === "brush") {
               setBrushDraft([pagePoint])
             } else if (drawingTool === "polygon") {
@@ -1224,7 +1282,10 @@ export function PageCanvas({
           if (touches.length !== 2) {
             return
           }
-          if (drawingTool === "brush") setBrushDraft([])
+          if (drawingTool === "brush") {
+            setBrushDraft([])
+            setDrawingGestureActive(false)
+          }
           else if (drawingTool) cancelDrawing()
           event.evt.preventDefault()
           event.target.stopDrag()
@@ -1615,7 +1676,7 @@ export function PageCanvas({
         </div>
         <Separator orientation="vertical" />
         <CanvasControl
-          label="Zoom out · −"
+          label={`Zoom out · ${formatEditorShortcut(EDITOR_SHORTCUTS.zoomOut)}`}
           disabled={zoomPercent <= MIN_ZOOM * 100}
           onClick={() => zoomAt({ x: width / 2, y: height / 2 }, 1 / 1.2)}
         >
@@ -1635,10 +1696,12 @@ export function PageCanvas({
               </Button>
             }
           />
-          <TooltipContent>Fit page · 0</TooltipContent>
+          <TooltipContent>
+            Fit page · {formatEditorShortcut(EDITOR_SHORTCUTS.fitPage)}
+          </TooltipContent>
         </Tooltip>
         <CanvasControl
-          label="Zoom in · +"
+          label={`Zoom in · ${formatEditorShortcut(EDITOR_SHORTCUTS.zoomIn)}`}
           disabled={zoomPercent >= MAX_ZOOM * 100}
           onClick={() => zoomAt({ x: width / 2, y: height / 2 }, 1.2)}
         >
@@ -1676,7 +1739,11 @@ export function PageCanvas({
                 />
               }
             />
-            <TooltipContent>Brush size</TooltipContent>
+            <TooltipContent>
+              Brush size ·{" "}
+              {formatEditorShortcut(EDITOR_SHORTCUTS.decreaseBrushSize)} /{" "}
+              {formatEditorShortcut(EDITOR_SHORTCUTS.increaseBrushSize)}
+            </TooltipContent>
           </Tooltip>
           <Button variant="ghost" size="sm" onClick={cancelDrawing}>
             Done
@@ -1747,6 +1814,7 @@ export function PageCanvas({
                 onClick={() => {
                   setPolygonPoints([])
                   setPolygonPointer(null)
+                  setDrawingGestureActive(false)
                 }}
               >
                 Cancel

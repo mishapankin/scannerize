@@ -21,8 +21,11 @@ import {
   AlignCenterIcon,
   AlignLeftIcon,
   AlignRightIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
   BrushIcon,
   CircleIcon,
+  ClipboardPasteIcon,
   CopyIcon,
   DownloadIcon,
   EyeIcon,
@@ -42,6 +45,8 @@ import {
   PlusIcon,
   Redo2Icon,
   RotateCwIcon,
+  SaveIcon,
+  ScissorsIcon,
   ScanLineIcon,
   SlidersHorizontalIcon,
   SquareIcon,
@@ -136,6 +141,7 @@ import {
 } from "@/lib/editor-store"
 import {
   EDITOR_SHORTCUTS,
+  formatDeleteShortcut,
   formatEditorShortcut,
 } from "@/lib/editor-shortcuts"
 import { exportDocument, importPdfFile, renderPageComposite } from "@/lib/pdf-engine"
@@ -199,6 +205,15 @@ const SHAPE_INSERT_ACTIONS = [
   label: string
   icon: LucideIcon
 }>
+
+function cloneLayerForClipboard(layer: EditorLayer): EditorLayer {
+  return {
+    ...layer,
+    ...(layer.type === "shape" || layer.type === "brush"
+      ? { points: [...layer.points] }
+      : {}),
+  }
+}
 
 function useNarrowLayout() {
   const [narrow, setNarrow] = useState(() =>
@@ -560,11 +575,13 @@ function LayerRow({
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
-  const [renaming, setRenaming] = useState(false)
+  const renamingLayerId = useEditorStore((state) => state.renamingLayerId)
+  const setRenamingLayer = useEditorStore((state) => state.setRenamingLayer)
   const [nameDraft, setNameDraft] = useState(layer.name)
   const cancelRenameRef = useRef(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const selected = selectedLayerId === layer.id
+  const renaming = renamingLayerId === layer.id
   const { ref, handleRef, isDragSource } = useSortable({
     id: layer.id,
     index,
@@ -589,13 +606,13 @@ function LayerRow({
     selectLayer(layer.id)
     cancelRenameRef.current = false
     setNameDraft(layer.name)
-    setRenaming(true)
+    setRenamingLayer(layer.id)
   }
 
   const finishRenaming = () => {
     const cancelled = cancelRenameRef.current
     cancelRenameRef.current = false
-    setRenaming(false)
+    setRenamingLayer(null)
 
     if (cancelled) return
 
@@ -1281,7 +1298,14 @@ export default function Editor() {
   const document = useEditorStore((state) => state.document)
   const selectedPageId = useEditorStore((state) => state.selectedPageId)
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
+  const drawingTool = useEditorStore((state) => state.drawingTool)
+  const drawingGestureActive = useEditorStore(
+    (state) => state.drawingGestureActive
+  )
   const setDocument = useEditorStore((state) => state.setDocument)
+  const selectPage = useEditorStore((state) => state.selectPage)
+  const selectLayer = useEditorStore((state) => state.selectLayer)
+  const setRenamingLayer = useEditorStore((state) => state.setRenamingLayer)
   const appendPages = useEditorStore((state) => state.appendPages)
   const addBlankPage = useEditorStore((state) => state.addBlankPage)
   const addLayer = useEditorStore((state) => state.addLayer)
@@ -1290,8 +1314,17 @@ export default function Editor() {
   const deletePage = useEditorStore((state) => state.deletePage)
   const duplicatePage = useEditorStore((state) => state.duplicatePage)
   const rotatePage = useEditorStore((state) => state.rotatePage)
+  const movePage = useEditorStore((state) => state.movePage)
   const duplicateLayer = useEditorStore((state) => state.duplicateLayer)
   const deleteLayer = useEditorStore((state) => state.deleteLayer)
+  const moveLayer = useEditorStore((state) => state.moveLayer)
+  const updateLayer = useEditorStore((state) => state.updateLayer)
+  const brushWidth = useEditorStore((state) => state.brushWidth)
+  const setBrushWidth = useEditorStore((state) => state.setBrushWidth)
+  const shapeFill = useEditorStore((state) => state.shapeFill)
+  const shapeStroke = useEditorStore((state) => state.shapeStroke)
+  const setShapeFill = useEditorStore((state) => state.setShapeFill)
+  const setShapeStroke = useEditorStore((state) => state.setShapeStroke)
   const selectedPage =
     document?.pages.find((page) => page.id === selectedPageId) ?? null
   const selectedLayer =
@@ -1310,7 +1343,9 @@ export default function Editor() {
   const pdfInputRef = useRef<HTMLInputElement>(null)
   const appendInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const layerClipboardRef = useRef<EditorLayer | null>(null)
   const [busy, setBusy] = useState(false)
+  const [hasLayerClipboard, setHasLayerClipboard] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deletePageId, setDeletePageId] = useState<string | null>(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
@@ -1325,6 +1360,98 @@ export default function Editor() {
   const restoring = persistence.status === "loading"
   const commandShortcutsEnabled =
     !restoring && !exportDialogOpen && !deletePageId
+
+  function copySelectedLayer(cut = false) {
+    if (!selectedPage || !selectedLayer) return
+    layerClipboardRef.current = cloneLayerForClipboard(selectedLayer)
+    setHasLayerClipboard(true)
+    if (cut) deleteLayer(selectedPage.id, selectedLayer.id)
+  }
+
+  function pasteLayer() {
+    if (!selectedPage || !layerClipboardRef.current) return
+    const source = layerClipboardRef.current
+    addLayer(selectedPage.id, {
+      ...cloneLayerForClipboard(source),
+      id: crypto.randomUUID(),
+      name: `${source.name} copy`,
+      x: source.x + 12,
+      y: source.y + 12,
+    })
+  }
+
+  function selectAdjacentLayer(direction: -1 | 1) {
+    if (!selectedPage?.layers.length) return
+    const currentIndex = selectedLayerId
+      ? selectedPage.layers.findIndex((layer) => layer.id === selectedLayerId)
+      : direction > 0
+        ? -1
+        : selectedPage.layers.length
+    const nextIndex = Math.min(
+      selectedPage.layers.length - 1,
+      Math.max(0, currentIndex + direction)
+    )
+    selectLayer(selectedPage.layers[nextIndex]?.id ?? null)
+  }
+
+  function moveSelectedLayer(direction: -1 | 1 | "front" | "back") {
+    if (!selectedPage || !selectedLayer || selectedLayer.locked) return
+    const layers = selectedPage.layers
+    const currentIndex = layers.findIndex((layer) => layer.id === selectedLayer.id)
+    const targetIndex =
+      direction === "front"
+        ? layers.length - 1
+        : direction === "back"
+          ? 0
+          : Math.min(layers.length - 1, Math.max(0, currentIndex + direction))
+    const target = layers[targetIndex]
+    if (target && target.id !== selectedLayer.id) {
+      moveLayer(selectedPage.id, selectedLayer.id, target.id)
+    }
+  }
+
+  function selectAdjacentPage(direction: -1 | 1) {
+    if (!document?.pages.length || !selectedPageId) return
+    const currentIndex = document.pages.findIndex(
+      (page) => page.id === selectedPageId
+    )
+    const nextIndex = Math.min(
+      document.pages.length - 1,
+      Math.max(0, currentIndex + direction)
+    )
+    const nextPage = document.pages[nextIndex]
+    if (nextPage && nextPage.id !== selectedPageId) selectPage(nextPage.id)
+  }
+
+  function moveSelectedPage(direction: -1 | 1) {
+    if (!document?.pages.length || !selectedPageId) return
+    const currentIndex = document.pages.findIndex(
+      (page) => page.id === selectedPageId
+    )
+    const targetIndex = Math.min(
+      document.pages.length - 1,
+      Math.max(0, currentIndex + direction)
+    )
+    const target = document.pages[targetIndex]
+    if (target && target.id !== selectedPageId) {
+      movePage(selectedPageId, target.id)
+    }
+  }
+
+  function changeBrushSize(direction: -1 | 1) {
+    const step = brushWidth < 10 ? 1 : 5
+    setBrushWidth(brushWidth + direction * step)
+  }
+
+  function updateShapePaint(mode: "swap" | "reset") {
+    const fill = mode === "swap" ? shapeStroke : "#FFFFFF"
+    const stroke = mode === "swap" ? shapeFill : "#26241F"
+    setShapeFill(fill)
+    setShapeStroke(stroke)
+    if (selectedPage && selectedLayer?.type === "shape") {
+      updateLayer(selectedPage.id, selectedLayer.id, { fill, stroke })
+    }
+  }
 
   useHotkeys(
     [
@@ -1360,6 +1487,230 @@ export default function Editor() {
         callback: () => redo(),
         options: { enabled: commandShortcutsEnabled && canRedo },
       },
+      {
+        hotkey: EDITOR_SHORTCUTS.saveDocument,
+        callback: () => void persistence.saveDocument(),
+        options: { enabled: commandShortcutsEnabled && Boolean(document) },
+      },
+      ...[
+        EDITOR_SHORTCUTS.deleteLayer,
+        EDITOR_SHORTCUTS.deleteLayerForward,
+      ].map((hotkey) => ({
+        hotkey,
+        callback: () => {
+          if (selectedPage && selectedLayer) {
+            deleteLayer(selectedPage.id, selectedLayer.id)
+          }
+        },
+        options: {
+          enabled:
+            commandShortcutsEnabled && !drawingGestureActive && hasSelectedLayer,
+        },
+      })),
+      ...[
+        EDITOR_SHORTCUTS.deletePage,
+        EDITOR_SHORTCUTS.deletePageForward,
+      ].map((hotkey) => ({
+        hotkey,
+        callback: () => selectedPageId && setDeletePageId(selectedPageId),
+        options: {
+          enabled:
+            commandShortcutsEnabled &&
+            !drawingGestureActive &&
+            Boolean(selectedPageId),
+        },
+      })),
+      {
+        hotkey: EDITOR_SHORTCUTS.duplicateLayer,
+        callback: () => {
+          if (selectedPage && selectedLayer) {
+            duplicateLayer(selectedPage.id, selectedLayer.id)
+          }
+        },
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.duplicatePage,
+        callback: () => selectedPageId && duplicatePage(selectedPageId),
+        options: {
+          enabled:
+            commandShortcutsEnabled &&
+            !drawingGestureActive &&
+            Boolean(selectedPageId),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.renameLayer,
+        callback: () => selectedLayerId && setRenamingLayer(selectedLayerId),
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.selectLayerAbove,
+        callback: () => selectAdjacentLayer(1),
+        options: {
+          enabled:
+            commandShortcutsEnabled && !drawingGestureActive && Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.selectLayerBelow,
+        callback: () => selectAdjacentLayer(-1),
+        options: {
+          enabled:
+            commandShortcutsEnabled && !drawingGestureActive && Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.moveLayerForward,
+        callback: () => moveSelectedLayer(1),
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.moveLayerBackward,
+        callback: () => moveSelectedLayer(-1),
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.moveLayerToFront,
+        callback: () => moveSelectedLayer("front"),
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.moveLayerToBack,
+        callback: () => moveSelectedLayer("back"),
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.toggleLayerVisibility,
+        callback: () => {
+          if (selectedPage && selectedLayer) {
+            updateLayer(selectedPage.id, selectedLayer.id, {
+              visible: !selectedLayer.visible,
+            })
+          }
+        },
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.toggleLayerLock,
+        callback: () => {
+          if (selectedPage && selectedLayer) {
+            updateLayer(selectedPage.id, selectedLayer.id, {
+              locked: !selectedLayer.locked,
+            })
+          }
+        },
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.copyLayer,
+        callback: () => copySelectedLayer(),
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.cutLayer,
+        callback: () => copySelectedLayer(true),
+        options: { enabled: commandShortcutsEnabled && hasSelectedLayer },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.pasteLayer,
+        callback: pasteLayer,
+        options: {
+          enabled:
+            commandShortcutsEnabled && hasLayerClipboard && Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.deselectLayer,
+        callback: () => selectLayer(null),
+        options: {
+          enabled: commandShortcutsEnabled && !drawingTool && hasSelectedLayer,
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.previousPage,
+        callback: () => selectAdjacentPage(-1),
+        options: {
+          enabled:
+            commandShortcutsEnabled && !drawingGestureActive && Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.nextPage,
+        callback: () => selectAdjacentPage(1),
+        options: {
+          enabled:
+            commandShortcutsEnabled && !drawingGestureActive && Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.movePageEarlier,
+        callback: () => moveSelectedPage(-1),
+        options: {
+          enabled:
+            commandShortcutsEnabled &&
+            !drawingGestureActive &&
+            Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.movePageLater,
+        callback: () => moveSelectedPage(1),
+        options: {
+          enabled:
+            commandShortcutsEnabled &&
+            !drawingGestureActive &&
+            Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.addBlankPage,
+        callback: addBlankPage,
+        options: { enabled: commandShortcutsEnabled && !drawingGestureActive },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.rotatePage,
+        callback: () => selectedPageId && rotatePage(selectedPageId),
+        options: {
+          enabled:
+            commandShortcutsEnabled && !drawingGestureActive && Boolean(selectedPage),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.textTool,
+        callback: addText,
+        options: { enabled: commandShortcutsEnabled },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.decreaseBrushSize,
+        callback: () => changeBrushSize(-1),
+        options: { enabled: commandShortcutsEnabled && drawingTool === "brush" },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.increaseBrushSize,
+        callback: () => changeBrushSize(1),
+        options: { enabled: commandShortcutsEnabled && drawingTool === "brush" },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.swapShapePaint,
+        callback: () => updateShapePaint("swap"),
+        options: {
+          enabled:
+            commandShortcutsEnabled &&
+            ((drawingTool !== null && drawingTool !== "brush") ||
+              selectedLayer?.type === "shape"),
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.resetShapePaint,
+        callback: () => updateShapePaint("reset"),
+        options: {
+          enabled:
+            commandShortcutsEnabled &&
+            ((drawingTool !== null && drawingTool !== "brush") ||
+              selectedLayer?.type === "shape"),
+        },
+      },
     ],
     {
       ignoreInputs: true,
@@ -1377,6 +1728,8 @@ export default function Editor() {
       if (append && document) {
         appendPages(imported.pages)
       } else {
+        layerClipboardRef.current = null
+        setHasLayerClipboard(false)
         const nextDocument = {
           id: crypto.randomUUID(),
           name: imported.name,
@@ -1399,6 +1752,7 @@ export default function Editor() {
   }
 
   function addText() {
+    setDrawingTool(null)
     const pageId = ensurePage()
     const page = useEditorStore
       .getState()
@@ -1493,7 +1847,10 @@ export default function Editor() {
   async function closeDocument() {
     setBusy(true)
     try {
-      await persistence.closeDocument()
+      if (await persistence.closeDocument()) {
+        layerClipboardRef.current = null
+        setHasLayerClipboard(false)
+      }
     } finally {
       setBusy(false)
     }
@@ -1591,6 +1948,15 @@ export default function Editor() {
                     {formatEditorShortcut(EDITOR_SHORTCUTS.appendPdf)}
                   </MenubarShortcut>
                 </MenubarItem>
+                <MenubarItem
+                  disabled={restoring || !document}
+                  onClick={() => void persistence.saveDocument()}
+                >
+                  <SaveIcon /> Save now
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.saveDocument)}
+                  </MenubarShortcut>
+                </MenubarItem>
               </MenubarGroup>
               <MenubarSeparator />
               <MenubarGroup>
@@ -1637,6 +2003,47 @@ export default function Editor() {
               <MenubarGroup>
                 <MenubarItem
                   disabled={!hasSelectedLayer}
+                  onClick={() => copySelectedLayer(true)}
+                >
+                  <ScissorsIcon /> Cut layer
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.cutLayer)}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!hasSelectedLayer}
+                  onClick={() => copySelectedLayer()}
+                >
+                  <CopyIcon /> Copy layer
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.copyLayer)}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!selectedPage || !hasLayerClipboard}
+                  onClick={pasteLayer}
+                >
+                  <ClipboardPasteIcon /> Paste layer
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.pasteLayer)}
+                  </MenubarShortcut>
+                </MenubarItem>
+              </MenubarGroup>
+              <MenubarSeparator />
+              <MenubarGroup>
+                <MenubarItem
+                  disabled={!hasSelectedLayer}
+                  onClick={() =>
+                    selectedLayerId && setRenamingLayer(selectedLayerId)
+                  }
+                >
+                  <PencilIcon /> Rename layer
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.renameLayer)}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!hasSelectedLayer}
                   onClick={() => {
                     if (selectedPage && selectedLayerId) {
                       duplicateLayer(selectedPage.id, selectedLayerId)
@@ -1644,6 +2051,9 @@ export default function Editor() {
                   }}
                 >
                   <CopyIcon /> Duplicate layer
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.duplicateLayer)}
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem
                   variant="destructive"
@@ -1655,6 +2065,101 @@ export default function Editor() {
                   }}
                 >
                   <Trash2Icon /> Delete layer
+                  <MenubarShortcut>
+                    {formatDeleteShortcut("layer")}
+                  </MenubarShortcut>
+                </MenubarItem>
+              </MenubarGroup>
+              <MenubarSeparator />
+              <MenubarGroup>
+                <MenubarSub>
+                  <MenubarSubTrigger disabled={!hasSelectedLayer}>
+                    <Layers3Icon /> Layer order
+                  </MenubarSubTrigger>
+                  <MenubarSubContent>
+                    <MenubarGroup>
+                      <MenubarItem onClick={() => selectAdjacentLayer(1)}>
+                        <ArrowUpIcon /> Select above
+                        <MenubarShortcut>
+                          {formatEditorShortcut(
+                            EDITOR_SHORTCUTS.selectLayerAbove
+                          )}
+                        </MenubarShortcut>
+                      </MenubarItem>
+                      <MenubarItem onClick={() => selectAdjacentLayer(-1)}>
+                        <ArrowDownIcon /> Select below
+                        <MenubarShortcut>
+                          {formatEditorShortcut(
+                            EDITOR_SHORTCUTS.selectLayerBelow
+                          )}
+                        </MenubarShortcut>
+                      </MenubarItem>
+                      <MenubarItem onClick={() => moveSelectedLayer(1)}>
+                        <ArrowUpIcon /> Move forward
+                        <MenubarShortcut>
+                          {formatEditorShortcut(
+                            EDITOR_SHORTCUTS.moveLayerForward
+                          )}
+                        </MenubarShortcut>
+                      </MenubarItem>
+                      <MenubarItem onClick={() => moveSelectedLayer(-1)}>
+                        <ArrowDownIcon /> Move backward
+                        <MenubarShortcut>
+                          {formatEditorShortcut(
+                            EDITOR_SHORTCUTS.moveLayerBackward
+                          )}
+                        </MenubarShortcut>
+                      </MenubarItem>
+                      <MenubarItem onClick={() => moveSelectedLayer("front")}>
+                        <ArrowUpIcon /> Bring to front
+                        <MenubarShortcut>
+                          {formatEditorShortcut(
+                            EDITOR_SHORTCUTS.moveLayerToFront
+                          )}
+                        </MenubarShortcut>
+                      </MenubarItem>
+                      <MenubarItem onClick={() => moveSelectedLayer("back")}>
+                        <ArrowDownIcon /> Send to back
+                        <MenubarShortcut>
+                          {formatEditorShortcut(
+                            EDITOR_SHORTCUTS.moveLayerToBack
+                          )}
+                        </MenubarShortcut>
+                      </MenubarItem>
+                    </MenubarGroup>
+                  </MenubarSubContent>
+                </MenubarSub>
+                <MenubarItem
+                  disabled={!selectedLayer}
+                  onClick={() => {
+                    if (selectedPage && selectedLayer) {
+                      updateLayer(selectedPage.id, selectedLayer.id, {
+                        visible: !selectedLayer.visible,
+                      })
+                    }
+                  }}
+                >
+                  <EyeIcon /> Toggle visibility
+                  <MenubarShortcut>
+                    {formatEditorShortcut(
+                      EDITOR_SHORTCUTS.toggleLayerVisibility
+                    )}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!selectedLayer}
+                  onClick={() => {
+                    if (selectedPage && selectedLayer) {
+                      updateLayer(selectedPage.id, selectedLayer.id, {
+                        locked: !selectedLayer.locked,
+                      })
+                    }
+                  }}
+                >
+                  <LockIcon /> Toggle lock
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.toggleLayerLock)}
+                  </MenubarShortcut>
                 </MenubarItem>
               </MenubarGroup>
             </MenubarContent>
@@ -1672,6 +2177,9 @@ export default function Editor() {
                 </MenubarItem>
                 <MenubarItem disabled={restoring} onClick={addText}>
                   <TextCursorInputIcon /> Text
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.textTool)}
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem disabled={restoring} onClick={chooseBrushTool}>
                   <BrushIcon /> Brush
@@ -1706,6 +2214,9 @@ export default function Editor() {
               <MenubarGroup>
                 <MenubarItem disabled={restoring} onClick={addBlankPage}>
                   <PlusIcon /> Blank page
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.addBlankPage)}
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem
                   disabled={busy || restoring}
@@ -1728,6 +2239,9 @@ export default function Editor() {
                   }}
                 >
                   <CopyIcon /> Duplicate
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.duplicatePage)}
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarItem
                   disabled={!selectedPageId}
@@ -1736,6 +2250,45 @@ export default function Editor() {
                   }}
                 >
                   <RotateCwIcon /> Rotate clockwise
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.rotatePage)}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!selectedPageId}
+                  onClick={() => selectAdjacentPage(-1)}
+                >
+                  <ArrowUpIcon /> Previous page
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.previousPage)}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!selectedPageId}
+                  onClick={() => selectAdjacentPage(1)}
+                >
+                  <ArrowDownIcon /> Next page
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.nextPage)}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!selectedPageId}
+                  onClick={() => moveSelectedPage(-1)}
+                >
+                  <ArrowUpIcon /> Move earlier
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.movePageEarlier)}
+                  </MenubarShortcut>
+                </MenubarItem>
+                <MenubarItem
+                  disabled={!selectedPageId}
+                  onClick={() => moveSelectedPage(1)}
+                >
+                  <ArrowDownIcon /> Move later
+                  <MenubarShortcut>
+                    {formatEditorShortcut(EDITOR_SHORTCUTS.movePageLater)}
+                  </MenubarShortcut>
                 </MenubarItem>
               </MenubarGroup>
               <MenubarSeparator />
@@ -1748,6 +2301,9 @@ export default function Editor() {
                   }}
                 >
                   <Trash2Icon /> Delete
+                  <MenubarShortcut>
+                    {formatDeleteShortcut("page")}
+                  </MenubarShortcut>
                 </MenubarItem>
               </MenubarGroup>
             </MenubarContent>

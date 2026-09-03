@@ -49,7 +49,9 @@ type EditorState = {
   document: EditorDocument | null
   selectedPageId: string | null
   selectedLayerId: string | null
+  renamingLayerId: string | null
   drawingTool: DrawingTool | null
+  drawingGestureActive: boolean
   brushColor: string
   brushWidth: number
   shapeKind: ShapeKind
@@ -62,7 +64,9 @@ type EditorState = {
   resetDocument: () => void
   selectPage: (pageId: string) => void
   selectLayer: (layerId: string | null) => void
+  setRenamingLayer: (layerId: string | null) => void
   setDrawingTool: (tool: DrawingTool | null) => void
+  setDrawingGestureActive: (active: boolean) => void
   setBrushColor: (color: string) => void
   setBrushWidth: (width: number) => void
   setShapeKind: (shape: ShapeKind) => void
@@ -100,7 +104,9 @@ export const useEditorStore = create<EditorState>()(
       document: null,
       selectedPageId: null,
       selectedLayerId: null,
+      renamingLayerId: null,
       drawingTool: null,
+      drawingGestureActive: false,
       brushColor: "#26241F",
       brushWidth: 6,
       shapeKind: "rectangle",
@@ -114,27 +120,42 @@ export const useEditorStore = create<EditorState>()(
           state.document = document
           state.selectedPageId = document.pages[0]?.id ?? null
           state.selectedLayerId = null
+          state.renamingLayerId = null
           state.drawingTool = null
+          state.drawingGestureActive = false
         }),
       resetDocument: () =>
         set((state) => {
           state.document = null
           state.selectedPageId = null
           state.selectedLayerId = null
+          state.renamingLayerId = null
           state.drawingTool = null
+          state.drawingGestureActive = false
         }),
       selectPage: (pageId) =>
         set((state) => {
           state.selectedPageId = pageId
           state.selectedLayerId = null
+          state.renamingLayerId = null
+          state.drawingGestureActive = false
         }),
       selectLayer: (layerId) =>
         set((state) => {
           state.selectedLayerId = layerId
         }),
+      setRenamingLayer: (layerId) =>
+        set((state) => {
+          state.renamingLayerId = layerId
+        }),
       setDrawingTool: (tool) =>
         set((state) => {
           state.drawingTool = tool
+          state.drawingGestureActive = false
+        }),
+      setDrawingGestureActive: (active) =>
+        set((state) => {
+          state.drawingGestureActive = active
         }),
       setBrushColor: (color) =>
         set((state) => {
@@ -291,6 +312,7 @@ export const useEditorStore = create<EditorState>()(
           if (!page) return
           page.layers = page.layers.filter((layer) => layer.id !== layerId)
           if (state.selectedLayerId === layerId) state.selectedLayerId = null
+          if (state.renamingLayerId === layerId) state.renamingLayerId = null
         }),
       duplicateLayer: (pageId, layerId) =>
         set((state) => {
