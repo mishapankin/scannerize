@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -24,7 +23,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <TooltipProvider>
           {children}
-          <ServiceWorkerRegistration />
         </TooltipProvider>
       </body>
     </html>

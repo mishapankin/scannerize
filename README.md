@@ -80,7 +80,8 @@ Next.js uses `output: "export"` and produces a deployable `out/` directory. Ther
   versioned schema scoped to the deployment base path.
 - `zustand`, `immer`, and `zundo` hold the serializable document model and history.
 - `pdf-lib` creates the final PDF from page-sized flattened canvases.
-- Workbox generates `out/sw.js` after the static build and precaches the application shell.
+- The build writes an uncached `out/version.json`; the client checks it on startup, periodically, and when the tab returns to the foreground.
+- Workbox generates `out/sw.js` after the static build and precaches the application shell. Updated workers wait until the editor has saved and the user accepts the update.
 - Manrope Variable and Source Serif 4 Variable are bundled locally.
 
 Page and layer geometry is stored in PDF points, independent of screen zoom and export DPI. Shape and brush paths use normalized local coordinates, so canvas transforms, thumbnails, persistence, and high-DPI export share the same geometry. PDF.js proxies, decoded images, object URLs, and canvases stay in disposable runtime registries rather than editor history.
@@ -104,7 +105,7 @@ shrink oversized outliers without changing normal or smaller pages.
 
 ## Offline and GitHub Pages
 
-GitHub Pages is the static host, not an application server. On the first visit it serves HTML, CSS, JavaScript, fonts, and the PDF.js worker. The generated service worker caches those assets so later visits can load with no connection. All import, editing, and export work is local on every visit.
+GitHub Pages is the static host, not an application server. On the first visit it serves HTML, CSS, JavaScript, fonts, and the PDF.js worker. The generated service worker caches those assets so later visits can load with no connection. All import, editing, and export work is local on every visit. Each deployment embeds its build ID in the app and publishes the same ID in `version.json`. The manifest is omitted from the precache and requested with a cache-busting query. When a different build is available, the app downloads its worker in the background and exposes an Update action; activation waits for autosave and never interrupts an import, export, drawing gesture, or modal operation. Tabs coordinate update detection with `BroadcastChannel`.
 
 Direct `file://` execution is not supported because browsers restrict module workers and service workers there. This does not imply a backend: the deployment is the same static-site model as GitHub Pages.
 
@@ -126,7 +127,7 @@ pnpm lint
 pnpm build
 ```
 
-`pnpm build` uses Next's webpack builder because it is deterministic in restricted build environments, then generates the offline precache. The final route is statically prerendered.
+`pnpm build` assigns a deployment ID, uses Next's webpack builder because it is deterministic in restricted build environments, writes `version.json`, and generates the offline precache. GitHub Actions uses the commit SHA as the deployment ID; local builds use a unique ID. The final route is statically prerendered.
 
 ## Current limits
 

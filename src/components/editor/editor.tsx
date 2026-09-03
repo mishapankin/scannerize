@@ -45,6 +45,7 @@ import {
   PentagonIcon,
   PlusIcon,
   Redo2Icon,
+  RefreshCwIcon,
   RotateCwIcon,
   SaveIcon,
   ScissorsIcon,
@@ -162,6 +163,7 @@ import {
   isShapeStrokeEnabled,
 } from "@/lib/shape-geometry"
 import { useEditorPersistence } from "@/lib/use-editor-persistence"
+import { useAppUpdate } from "@/lib/use-app-update"
 import { cn } from "@/lib/utils"
 import type {
   EditorLayer,
@@ -1422,6 +1424,18 @@ export default function Editor() {
   } | null>(null)
 
   const restoring = persistence.status === "loading"
+  const updateBlocked =
+    restoring ||
+    busy ||
+    drawingGestureActive ||
+    Boolean(exportState) ||
+    Boolean(deletePageId) ||
+    exportDialogOpen
+  const appUpdate = useAppUpdate({
+    blocked: updateBlocked,
+    prepare: () =>
+      document ? persistence.saveDocument() : Promise.resolve(true),
+  })
   const commandShortcutsEnabled =
     !restoring && !exportDialogOpen && !deletePageId
 
@@ -1960,6 +1974,17 @@ export default function Editor() {
         <span className="min-w-0 flex-1 truncate text-center text-sm font-medium">
           {document?.name ?? "Untitled"}
         </span>
+        {appUpdate.available && (
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            disabled={appUpdate.updating || updateBlocked}
+            aria-label={appUpdate.updating ? "Installing update" : "Update available"}
+            onClick={() => void appUpdate.applyUpdate()}
+          >
+            <RefreshCwIcon className={cn(appUpdate.updating && "animate-spin")} />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-lg"
@@ -2373,6 +2398,19 @@ export default function Editor() {
         </span>
 
         <div className="ml-auto flex items-center gap-1">
+          {appUpdate.available && (
+            <Button
+              size="sm"
+              disabled={appUpdate.updating || updateBlocked}
+              onClick={() => void appUpdate.applyUpdate()}
+            >
+              <RefreshCwIcon
+                data-icon="inline-start"
+                className={cn(appUpdate.updating && "animate-spin")}
+              />
+              {appUpdate.updating ? "Updating…" : "Update"}
+            </Button>
+          )}
           {persistence.status !== "idle" && (
             <span
               className={cn(

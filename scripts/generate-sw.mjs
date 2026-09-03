@@ -6,12 +6,12 @@ const urlPrefix = `${basePath}/`;
 const { count, size, warnings } = await generateSW({
   globDirectory: "out",
   globPatterns: ["**/*.{html,css,js,mjs,json,webmanifest,woff2,svg,png,ico}"],
-  globIgnores: ["sw.js"],
+  globIgnores: ["sw.js", "version.json"],
   swDest: "out/sw.js",
   inlineWorkboxRuntime: true,
   cleanupOutdatedCaches: true,
   clientsClaim: true,
-  skipWaiting: true,
+  skipWaiting: false,
   navigateFallback: `${basePath}/index.html`,
   modifyURLPrefix: {
     "": urlPrefix,

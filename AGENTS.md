@@ -24,6 +24,7 @@ Scannerize is an offline-first, browser-only PDF finishing editor. Read `README.
 - Bundle the PDF.js worker, fonts, icons, and all other required runtime assets locally. Verify their URLs from the built `out/` directory.
 - Treat the GitHub Pages repository base path as part of the architecture. Next.js assets, the manifest, PDF.js worker, service-worker registration, and precache URLs must work from both a repository subpath and the domain root.
 - Precache the complete application shell with a generated service worker so a previously loaded deployment reopens without a network connection. The service worker must version caches and remove obsolete versions on activation.
+- Publish a build-ID manifest outside the service-worker precache. Updated workers must wait for explicit activation until the editor has flushed autosave; update checks must fail silently offline and remain compatible with the GitHub Pages base path.
 
 ## UI and component rules
 
