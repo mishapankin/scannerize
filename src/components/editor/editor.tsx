@@ -21,6 +21,7 @@ import {
   AlignCenterIcon,
   AlignLeftIcon,
   AlignRightIcon,
+  CircleIcon,
   CopyIcon,
   DownloadIcon,
   EyeIcon,
@@ -33,12 +34,16 @@ import {
   Layers3Icon,
   LockIcon,
   MenuIcon,
+  MinusIcon,
+  MoveUpRightIcon,
   PencilIcon,
+  PentagonIcon,
   PlusIcon,
   Redo2Icon,
   RotateCwIcon,
   ScanLineIcon,
   SlidersHorizontalIcon,
+  SquareIcon,
   TextCursorInputIcon,
   Trash2Icon,
   Undo2Icon,
@@ -92,6 +97,9 @@ import {
   MenubarMenu,
   MenubarSeparator,
   MenubarShortcut,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
   MenubarTrigger,
 } from "@/components/ui/menubar"
 import { Progress } from "@/components/ui/progress"
@@ -110,6 +118,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -131,11 +140,16 @@ import {
 import { exportDocument, importPdfFile, renderPageComposite } from "@/lib/pdf-engine"
 import type { ExportSettings } from "@/lib/export-plan"
 import { getTextResizeMode } from "@/lib/text-layout"
+import {
+  isShapeFillEnabled,
+  isShapeStrokeEnabled,
+} from "@/lib/shape-geometry"
 import { useEditorPersistence } from "@/lib/use-editor-persistence"
 import { cn } from "@/lib/utils"
 import type {
   EditorLayer,
   EditorPage,
+  ShapeKind,
   TextLayer,
   TextResizeMode,
 } from "@/types/editor"
@@ -173,6 +187,17 @@ const SORTABLE_SENSORS = [
   }),
   KeyboardSensor,
 ]
+const SHAPE_INSERT_ACTIONS = [
+  { value: "rectangle", label: "Rectangle", icon: SquareIcon },
+  { value: "ellipse", label: "Ellipse", icon: CircleIcon },
+  { value: "line", label: "Line", icon: MinusIcon },
+  { value: "arrow", label: "Arrow", icon: MoveUpRightIcon },
+  { value: "polygon", label: "Polygon", icon: PentagonIcon },
+] as const satisfies ReadonlyArray<{
+  value: ShapeKind
+  label: string
+  icon: LucideIcon
+}>
 
 function useNarrowLayout() {
   const [narrow, setNarrow] = useState(() =>
@@ -501,6 +526,22 @@ function PageRail({
   )
 }
 
+function LayerTypeIcon({ layer }: { layer: EditorLayer }) {
+  if (layer.type === "image") return <FileImageIcon className="size-4" />
+  if (layer.type === "text") return <TextCursorInputIcon className="size-4" />
+  const Icon =
+    layer.shape === "rectangle"
+      ? SquareIcon
+      : layer.shape === "ellipse"
+        ? CircleIcon
+        : layer.shape === "line"
+          ? MinusIcon
+          : layer.shape === "arrow"
+            ? MoveUpRightIcon
+            : PentagonIcon
+  return <Icon className="size-4" />
+}
+
 function LayerRow({
   page,
   layer,
@@ -582,11 +623,7 @@ function LayerRow({
                 selected ? "text-accent-foreground" : "text-muted-foreground"
               )}
             />
-            {layer.type === "image" ? (
-              <FileImageIcon className="size-4" />
-            ) : (
-              <TextCursorInputIcon className="size-4" />
-            )}
+            <LayerTypeIcon layer={layer} />
             <Input
               ref={renameInputRef}
               value={nameDraft}
@@ -632,11 +669,7 @@ function LayerRow({
                 selected ? "text-accent-foreground" : "text-muted-foreground"
               )}
             />
-            {layer.type === "image" ? (
-              <FileImageIcon className="size-4" />
-            ) : (
-              <TextCursorInputIcon className="size-4" />
-            )}
+            <LayerTypeIcon layer={layer} />
             <span className="truncate">{layer.name}</span>
           </button>
         )}
@@ -678,6 +711,10 @@ function LayerRow({
 function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer }) {
   const updateLayer = useEditorStore((state) => state.updateLayer)
   const colorGestureActiveRef = useRef(false)
+  const shapeFillEnabled =
+    layer.type === "shape" && isShapeFillEnabled(layer)
+  const shapeStrokeEnabled =
+    layer.type === "shape" && isShapeStrokeEnabled(layer)
 
   useEffect(
     () => () => {
@@ -688,8 +725,9 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
     []
   )
 
-  const updateColor = (fill: string) => {
-    updateLayer(page.id, layer.id, { fill })
+  const updateColor = (property: "fill" | "stroke", value: string) => {
+    if (property === "fill") updateLayer(page.id, layer.id, { fill: value })
+    else updateLayer(page.id, layer.id, { stroke: value })
 
     if (!colorGestureActiveRef.current) {
       colorGestureActiveRef.current = true
@@ -833,11 +871,96 @@ function LayerProperties({ page, layer }: { page: EditorPage; layer: EditorLayer
                   id="text-color"
                   value={layer.fill}
                   label="Text color"
-                  onValueChange={updateColor}
+                  onValueChange={(value) => updateColor("fill", value)}
                   onValueChangeEnd={finishColorGesture}
                 />
               </Field>
             </div>
+          </>
+        )}
+
+        {layer.type === "shape" && (
+          <>
+            {layer.shape !== "line" && layer.shape !== "arrow" && (
+              <>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="shape-fill-enabled">Fill</FieldLabel>
+                  <Switch
+                    id="shape-fill-enabled"
+                    checked={shapeFillEnabled}
+                    onCheckedChange={(checked) =>
+                      updateLayer(page.id, layer.id, {
+                        fill: layer.fill ?? "#FFFFFF",
+                        fillEnabled: checked,
+                      })
+                    }
+                    aria-label="Enable fill"
+                  />
+                </Field>
+                <Field
+                  orientation="horizontal"
+                  data-disabled={!shapeFillEnabled}
+                >
+                  <FieldLabel htmlFor="shape-fill-color">Fill color</FieldLabel>
+                  <ColorPicker
+                    id="shape-fill-color"
+                    value={layer.fill ?? "#FFFFFF"}
+                    label="Fill color"
+                    disabled={!shapeFillEnabled}
+                    onValueChange={(value) => updateColor("fill", value)}
+                    onValueChangeEnd={finishColorGesture}
+                  />
+                </Field>
+              </>
+            )}
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="shape-stroke-enabled">Stroke</FieldLabel>
+              <Switch
+                id="shape-stroke-enabled"
+                checked={shapeStrokeEnabled}
+                onCheckedChange={(checked) =>
+                  updateLayer(page.id, layer.id, {
+                    stroke: layer.stroke ?? "#26241F",
+                    strokeEnabled: checked,
+                  })
+                }
+                aria-label="Enable stroke"
+              />
+            </Field>
+            <Field
+              orientation="horizontal"
+              data-disabled={!shapeStrokeEnabled}
+            >
+              <FieldLabel htmlFor="shape-stroke-color">Stroke color</FieldLabel>
+              <ColorPicker
+                id="shape-stroke-color"
+                value={layer.stroke ?? "#26241F"}
+                label="Stroke color"
+                disabled={!shapeStrokeEnabled}
+                onValueChange={(value) => updateColor("stroke", value)}
+                onValueChangeEnd={finishColorGesture}
+              />
+            </Field>
+            <Field data-disabled={!shapeStrokeEnabled}>
+              <FieldLabel htmlFor="shape-stroke-width">Stroke width</FieldLabel>
+              <Input
+                id="shape-stroke-width"
+                type="number"
+                min={0.25}
+                max={72}
+                step={0.25}
+                value={layer.strokeWidth}
+                disabled={!shapeStrokeEnabled}
+                onChange={(event) =>
+                  updateLayer(page.id, layer.id, {
+                    strokeWidth: Math.min(
+                      72,
+                      Math.max(0.25, Number(event.target.value))
+                    ),
+                  })
+                }
+              />
+            </Field>
           </>
         )}
 
@@ -1099,6 +1222,7 @@ export default function Editor() {
   const appendPages = useEditorStore((state) => state.appendPages)
   const addBlankPage = useEditorStore((state) => state.addBlankPage)
   const addLayer = useEditorStore((state) => state.addLayer)
+  const setDrawingTool = useEditorStore((state) => state.setDrawingTool)
   const deletePage = useEditorStore((state) => state.deletePage)
   const duplicatePage = useEditorStore((state) => state.duplicatePage)
   const rotatePage = useEditorStore((state) => state.rotatePage)
@@ -1237,6 +1361,11 @@ export default function Editor() {
       align: "left",
       lineHeight: 1.2,
     })
+  }
+
+  function chooseShapeTool(shape: ShapeKind) {
+    ensurePage()
+    setDrawingTool(shape)
   }
 
   async function addImageFile(file: File) {
@@ -1474,6 +1603,32 @@ export default function Editor() {
                 <MenubarItem disabled={restoring} onClick={addText}>
                   <TextCursorInputIcon /> Text
                 </MenubarItem>
+                <MenubarSub>
+                  <MenubarSubTrigger disabled={restoring}>
+                    <SquareIcon /> Shape
+                  </MenubarSubTrigger>
+                  <MenubarSubContent>
+                    <MenubarGroup>
+                      {SHAPE_INSERT_ACTIONS.map(
+                        ({ value, label, icon: Icon }) => (
+                          <MenubarItem
+                            key={value}
+                            onClick={() => chooseShapeTool(value)}
+                          >
+                            <Icon /> {label}
+                            <MenubarShortcut>
+                              {formatEditorShortcut(
+                                EDITOR_SHORTCUTS[
+                                  `${value}Tool` as keyof typeof EDITOR_SHORTCUTS
+                                ]
+                              )}
+                            </MenubarShortcut>
+                          </MenubarItem>
+                        )
+                      )}
+                    </MenubarGroup>
+                  </MenubarSubContent>
+                </MenubarSub>
               </MenubarGroup>
               <MenubarSeparator />
               <MenubarGroup>
@@ -1727,7 +1882,24 @@ export default function Editor() {
         onOpenChange={(open) => setMobileDrawer(open ? "insert" : null)}
         title="Insert"
       >
-        <div className="flex flex-col py-2">
+        <div className="flex flex-col gap-4 py-3">
+          <MobileActionGroup label="Shape">
+            {SHAPE_INSERT_ACTIONS.map(({ value, label, icon }) => (
+              <MobileAction
+                key={value}
+                icon={icon}
+                disabled={restoring}
+                onClick={() => {
+                  setMobileDrawer(null)
+                  chooseShapeTool(value)
+                }}
+              >
+                {label}
+              </MobileAction>
+            ))}
+          </MobileActionGroup>
+          <Separator />
+          <MobileActionGroup label="Content">
           <MobileAction
             icon={ImagePlusIcon}
             disabled={busy || restoring}
@@ -1768,6 +1940,7 @@ export default function Editor() {
           >
             PDF pages…
           </MobileAction>
+          </MobileActionGroup>
         </div>
       </MobileDrawer>
 
@@ -1859,6 +2032,13 @@ export default function Editor() {
             <Separator />
 
             <MobileActionGroup label="Insert">
+              <MobileAction
+                icon={SquareIcon}
+                disabled={restoring}
+                onClick={() => setMobileDrawer("insert")}
+              >
+                Shapes
+              </MobileAction>
               <MobileAction
                 icon={ImagePlusIcon}
                 disabled={busy || restoring}

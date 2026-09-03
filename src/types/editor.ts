@@ -41,7 +41,20 @@ export type TextLayer = LayerBase & {
   lineHeight: number
 }
 
-export type EditorLayer = ImageLayer | TextLayer
+export type ShapeKind = "rectangle" | "ellipse" | "line" | "arrow" | "polygon"
+
+export type ShapeLayer = LayerBase & {
+  type: "shape"
+  shape: ShapeKind
+  points: number[]
+  fill: string | null
+  fillEnabled?: boolean
+  stroke: string | null
+  strokeEnabled?: boolean
+  strokeWidth: number
+}
+
+export type EditorLayer = ImageLayer | TextLayer | ShapeLayer
 
 export type EditorPage = {
   id: string

@@ -109,4 +109,47 @@ test("only visible page content prevents direct preservation", () => {
     ),
     false
   )
+
+  const visibleShape = {
+    id: "shape",
+    type: "shape",
+    shape: "rectangle",
+    name: "Rectangle",
+    x: 20,
+    y: 20,
+    width: 100,
+    height: 80,
+    rotation: 0,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    points: [],
+    fill: null,
+    stroke: "#000000",
+    strokeWidth: 1,
+  }
+
+  assert.equal(
+    canPreserveOriginalPage(
+      page("shape", 595, 842, { layers: [visibleShape] })
+    ),
+    false
+  )
+
+  assert.equal(
+    canPreserveOriginalPage(
+      page("disabled-shape", 595, 842, {
+        layers: [
+          {
+            ...visibleShape,
+            id: "disabled-shape",
+            fill: "#FFFFFF",
+            fillEnabled: false,
+            strokeEnabled: false,
+          },
+        ],
+      })
+    ),
+    true
+  )
 })

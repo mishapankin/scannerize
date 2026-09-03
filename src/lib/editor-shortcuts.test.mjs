@@ -28,3 +28,18 @@ test("editing shortcuts keep conventional cross-platform bindings", () => {
     "Ctrl+Shift+Z"
   )
 })
+
+test("tool shortcuts display consistently on every platform", () => {
+  assert.equal(
+    formatEditorShortcut(EDITOR_SHORTCUTS.rectangleTool, "mac"),
+    "R"
+  )
+  assert.equal(
+    formatEditorShortcut(EDITOR_SHORTCUTS.rectangleTool, "windows"),
+    "R"
+  )
+  assert.equal(
+    formatEditorShortcut(EDITOR_SHORTCUTS.rectangleTool, "linux"),
+    "R"
+  )
+})

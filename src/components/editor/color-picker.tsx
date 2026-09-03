@@ -17,6 +17,7 @@ type ColorPickerProps = {
   id?: string
   value: string
   label: string
+  disabled?: boolean
   onValueChange: (value: string) => void
   onValueChangeEnd: () => void
 }
@@ -25,6 +26,7 @@ export function ColorPicker({
   id,
   value,
   label,
+  disabled = false,
   onValueChange,
   onValueChangeEnd,
 }: ColorPickerProps) {
@@ -55,6 +57,7 @@ export function ColorPicker({
           <Button
             id={id}
             type="button"
+            disabled={disabled}
             variant="ghost"
             className="w-12 border border-input p-0"
             style={{ backgroundColor: value }}

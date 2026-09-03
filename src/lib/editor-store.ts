@@ -10,6 +10,8 @@ import type {
   EditorLayer,
   EditorPage,
   ImageLayer,
+  ShapeLayer,
+  ShapeKind,
   TextLayer,
 } from "@/types/editor"
 
@@ -31,6 +33,7 @@ function createBlankPage(index: number): EditorPage {
 function cloneLayer(layer: EditorLayer): EditorLayer {
   return {
     ...layer,
+    ...(layer.type === "shape" ? { points: [...layer.points] } : {}),
     id: crypto.randomUUID(),
     name: `${layer.name} copy`,
     x: layer.x + 12,
@@ -42,10 +45,12 @@ type EditorState = {
   document: EditorDocument | null
   selectedPageId: string | null
   selectedLayerId: string | null
+  drawingTool: ShapeKind | null
   setDocument: (document: EditorDocument) => void
   resetDocument: () => void
   selectPage: (pageId: string) => void
   selectLayer: (layerId: string | null) => void
+  setDrawingTool: (tool: ShapeKind | null) => void
   appendPages: (pages: EditorPage[]) => void
   addBlankPage: () => void
   deletePage: (pageId: string) => void
@@ -56,7 +61,7 @@ type EditorState = {
   updateLayer: (
     pageId: string,
     layerId: string,
-    patch: Partial<ImageLayer> | Partial<TextLayer>
+    patch: Partial<ImageLayer> | Partial<TextLayer> | Partial<ShapeLayer>
   ) => void
   deleteLayer: (pageId: string, layerId: string) => void
   duplicateLayer: (pageId: string, layerId: string) => void
@@ -71,17 +76,20 @@ export const useEditorStore = create<EditorState>()(
       document: null,
       selectedPageId: null,
       selectedLayerId: null,
+      drawingTool: null,
       setDocument: (document) =>
         set((state) => {
           state.document = document
           state.selectedPageId = document.pages[0]?.id ?? null
           state.selectedLayerId = null
+          state.drawingTool = null
         }),
       resetDocument: () =>
         set((state) => {
           state.document = null
           state.selectedPageId = null
           state.selectedLayerId = null
+          state.drawingTool = null
         }),
       selectPage: (pageId) =>
         set((state) => {
@@ -91,6 +99,10 @@ export const useEditorStore = create<EditorState>()(
       selectLayer: (layerId) =>
         set((state) => {
           state.selectedLayerId = layerId
+        }),
+      setDrawingTool: (tool) =>
+        set((state) => {
+          state.drawingTool = tool
         }),
       appendPages: (pages) =>
         set((state) => {
@@ -158,6 +170,7 @@ export const useEditorStore = create<EditorState>()(
             background: { ...source.background },
             layers: source.layers.map((layer) => ({
               ...layer,
+              ...(layer.type === "shape" ? { points: [...layer.points] } : {}),
               id: crypto.randomUUID(),
             })),
           }

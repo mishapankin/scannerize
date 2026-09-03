@@ -142,6 +142,10 @@
     @apply absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background/95 p-1 text-foreground;
   }
 
+  .polygon-drawing-controls {
+    @apply absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-lg border bg-background/95 p-1 text-foreground;
+  }
+
   .mobile-drawer {
     @apply flex max-w-none flex-col gap-0 overflow-hidden rounded-none bg-popover p-0 text-popover-foreground ring-0;
     display: flex !important;

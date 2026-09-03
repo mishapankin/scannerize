@@ -8,17 +8,26 @@ import {
   useState,
 } from "react"
 import Konva from "konva"
+import { useHotkeys } from "@tanstack/react-hotkeys"
 import {
+  CircleIcon,
   HandIcon,
+  MoveUpRightIcon,
   MinusIcon,
   MousePointer2Icon,
+  PentagonIcon,
   PlusIcon,
   SearchIcon,
+  SquareIcon,
 } from "lucide-react"
 import {
+  Arrow as KonvaArrow,
+  Circle as KonvaCircle,
+  Ellipse as KonvaEllipse,
   Group,
   Image as KonvaImage,
   Layer as KonvaLayer,
+  Line as KonvaLine,
   Rect,
   Stage,
   Text as KonvaText,
@@ -26,6 +35,13 @@ import {
 } from "react-konva"
 
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import {
   ToggleGroup,
@@ -37,10 +53,26 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { getImageAsset } from "@/lib/asset-registry"
+import { EDITOR_SHORTCUTS } from "@/lib/editor-shortcuts"
 import { useEditorStore } from "@/lib/editor-store"
 import { renderPageBackground } from "@/lib/pdf-engine"
+import {
+  getDraggedShapeGeometry,
+  getPolygonGeometry,
+  getScaledShapePoints,
+  getShapeName,
+  isShapeFillEnabled,
+  isShapeStrokeEnabled,
+  type ShapePoint,
+} from "@/lib/shape-geometry"
 import { getTextResizeMode } from "@/lib/text-layout"
-import type { EditorLayer, EditorPage } from "@/types/editor"
+import { cn } from "@/lib/utils"
+import type {
+  EditorLayer,
+  EditorPage,
+  ShapeKind,
+  ShapeLayer,
+} from "@/types/editor"
 
 type PageCanvasProps = {
   page: EditorPage
@@ -69,6 +101,14 @@ type PointerGestureStart = {
   viewport: Viewport
 }
 
+type DragShapeDraft = {
+  shape: Exclude<ShapeKind, "polygon">
+  start: ShapePoint
+  pointer: ShapePoint
+  constrain: boolean
+  fromCenter: boolean
+}
+
 const WORKSPACE_INSET = 40
 const MIN_VISIBLE_PAPER = 48
 const MIN_ZOOM = 0.25
@@ -87,6 +127,25 @@ const ALL_RESIZE_ANCHORS = [
   "middle-left",
 ]
 const HORIZONTAL_RESIZE_ANCHORS = ["middle-left", "middle-right"]
+const SHAPE_TOOLS = [
+  { value: "rectangle", label: "Rectangle · R", icon: SquareIcon },
+  { value: "ellipse", label: "Ellipse · O", icon: CircleIcon },
+  { value: "line", label: "Line · L", icon: MinusIcon },
+  { value: "arrow", label: "Arrow · A", icon: MoveUpRightIcon },
+  { value: "polygon", label: "Polygon · P", icon: PentagonIcon },
+] as const satisfies ReadonlyArray<{
+  value: ShapeKind
+  label: string
+  icon: typeof SquareIcon
+}>
+
+const DEFAULT_SHAPE_STYLE = {
+  fill: "#FFFFFF",
+  fillEnabled: false,
+  stroke: "#26241F",
+  strokeEnabled: true,
+  strokeWidth: 1.5,
+} as const
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value)
@@ -269,6 +328,54 @@ function CanvasLayerNode({
     )
   }
 
+  if (layer.type === "shape") {
+    const fillEnabled = isShapeFillEnabled(layer)
+    const strokeEnabled = isShapeStrokeEnabled(layer)
+    const shapeStyle = {
+      fill: fillEnabled ? (layer.fill ?? undefined) : undefined,
+      stroke: strokeEnabled ? (layer.stroke ?? undefined) : undefined,
+      strokeWidth: layer.strokeWidth,
+      strokeScaleEnabled: false,
+      hitStrokeWidth: Math.max(10, layer.strokeWidth),
+    }
+    const points = getScaledShapePoints(layer)
+
+    return (
+      <Group
+        {...common}
+        width={layer.width}
+        height={layer.height}
+        ref={(node) => registerRef(layer.id, node)}
+      >
+        {layer.shape === "rectangle" ? (
+          <Rect {...shapeStyle} width={layer.width} height={layer.height} />
+        ) : layer.shape === "ellipse" ? (
+          <KonvaEllipse
+            {...shapeStyle}
+            x={layer.width / 2}
+            y={layer.height / 2}
+            radiusX={layer.width / 2}
+            radiusY={layer.height / 2}
+          />
+        ) : layer.shape === "arrow" ? (
+          <KonvaArrow
+            {...shapeStyle}
+            fill={strokeEnabled ? (layer.stroke ?? undefined) : undefined}
+            points={points}
+            pointerLength={Math.max(8, layer.strokeWidth * 5)}
+            pointerWidth={Math.max(8, layer.strokeWidth * 5)}
+          />
+        ) : (
+          <KonvaLine
+            {...shapeStyle}
+            points={points}
+            closed={layer.shape === "polygon"}
+          />
+        )}
+      </Group>
+    )
+  }
+
   return (
     <KonvaText
       {...common}
@@ -359,6 +466,9 @@ export function PageCanvas({
 }: PageCanvasProps) {
   const selectedLayerId = useEditorStore((state) => state.selectedLayerId)
   const selectLayer = useEditorStore((state) => state.selectLayer)
+  const addLayer = useEditorStore((state) => state.addLayer)
+  const drawingTool = useEditorStore((state) => state.drawingTool)
+  const setDrawingTool = useEditorStore((state) => state.setDrawingTool)
   const transformerRef = useRef<Konva.Transformer>(null)
   const nodeRefs = useRef(new Map<string, Konva.Node>())
   const panStartRef = useRef<{
@@ -371,6 +481,10 @@ export function PageCanvas({
   const [spacePressed, setSpacePressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const [isZoomDragging, setIsZoomDragging] = useState(false)
+  const [dragShapeDraft, setDragShapeDraft] =
+    useState<DragShapeDraft | null>(null)
+  const [polygonPoints, setPolygonPoints] = useState<ShapePoint[]>([])
+  const [polygonPointer, setPolygonPointer] = useState<ShapePoint | null>(null)
 
   const fitScale = useMemo(
     () =>
@@ -423,10 +537,74 @@ export function PageCanvas({
     setViewport(fitViewport())
   }, [fitViewport])
 
+  const getPagePoint = useCallback(
+    (pointer: ShapePoint): ShapePoint => ({
+      x: Math.min(
+        page.widthPt,
+        Math.max(0, (pointer.x - viewport.x) / viewport.scale)
+      ),
+      y: Math.min(
+        page.heightPt,
+        Math.max(0, (pointer.y - viewport.y) / viewport.scale)
+      ),
+    }),
+    [page.heightPt, page.widthPt, viewport]
+  )
+
+  const addShapeLayer = useCallback(
+    (
+      shape: ShapeKind,
+      geometry: ReturnType<typeof getDraggedShapeGeometry>
+    ) => {
+      const layer: ShapeLayer = {
+        id: crypto.randomUUID(),
+        type: "shape",
+        shape,
+        name: getShapeName(shape),
+        ...geometry,
+        rotation: 0,
+        opacity: 1,
+        visible: true,
+        locked: false,
+        ...DEFAULT_SHAPE_STYLE,
+      }
+      addLayer(page.id, layer)
+      setDrawingTool(null)
+      setTool("select")
+      onEditLayer?.(layer.id)
+    },
+    [addLayer, onEditLayer, page.id, setDrawingTool]
+  )
+
+  const completePolygon = useCallback(() => {
+    const geometry = getPolygonGeometry(polygonPoints)
+    if (!geometry) return
+    addShapeLayer("polygon", geometry)
+    setPolygonPoints([])
+    setPolygonPointer(null)
+  }, [addShapeLayer, polygonPoints])
+
+  const cancelDrawing = useCallback(() => {
+    setDragShapeDraft(null)
+    setPolygonPoints([])
+    setPolygonPointer(null)
+    setDrawingTool(null)
+    setTool("select")
+  }, [setDrawingTool])
+
   useEffect(() => {
     const frame = window.requestAnimationFrame(resetView)
     return () => window.cancelAnimationFrame(frame)
   }, [page.id, resetView])
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setDragShapeDraft(null)
+      setPolygonPoints([])
+      setPolygonPointer(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [drawingTool, page.id])
 
   const zoomAt = useCallback(
     (point: { x: number; y: number }, factor: number) => {
@@ -512,12 +690,17 @@ export function PageCanvas({
         event.preventDefault()
         setSpacePressed(true)
       }
-      if (!event.metaKey && !event.ctrlKey && !event.altKey) {
-        const key = event.key.toLowerCase()
-        if (key === "v" || key === "h" || key === "z") {
-          event.preventDefault()
-          setTool(key === "v" ? "select" : key === "h" ? "pan" : "zoom")
-        }
+      if (event.key === "Escape" && drawingTool) {
+        event.preventDefault()
+        cancelDrawing()
+      }
+      if (event.key === "Enter" && drawingTool === "polygon") {
+        event.preventDefault()
+        completePolygon()
+      }
+      if (event.key === "Backspace" && drawingTool === "polygon") {
+        event.preventDefault()
+        setPolygonPoints((points) => points.slice(0, -1))
       }
       if (event.key === "+" || event.key === "=") {
         event.preventDefault()
@@ -548,7 +731,64 @@ export function PageCanvas({
       window.removeEventListener("keyup", onKeyUp)
       window.removeEventListener("blur", onBlur)
     }
-  }, [endPointerGesture, height, resetView, width, zoomAt])
+  }, [
+    cancelDrawing,
+    completePolygon,
+    drawingTool,
+    endPointerGesture,
+    height,
+    resetView,
+    setDrawingTool,
+    width,
+    zoomAt,
+  ])
+
+  useHotkeys(
+    [
+      {
+        hotkey: EDITOR_SHORTCUTS.selectTool,
+        callback: () => {
+          setTool("select")
+          setDrawingTool(null)
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.panTool,
+        callback: () => {
+          setTool("pan")
+          setDrawingTool(null)
+        },
+      },
+      {
+        hotkey: EDITOR_SHORTCUTS.zoomTool,
+        callback: () => {
+          setTool("zoom")
+          setDrawingTool(null)
+        },
+      },
+      ...(
+        [
+          [EDITOR_SHORTCUTS.rectangleTool, "rectangle"],
+          [EDITOR_SHORTCUTS.ellipseTool, "ellipse"],
+          [EDITOR_SHORTCUTS.lineTool, "line"],
+          [EDITOR_SHORTCUTS.arrowTool, "arrow"],
+          [EDITOR_SHORTCUTS.polygonTool, "polygon"],
+        ] as const
+      ).map(([hotkey, shape]) => ({
+        hotkey,
+        callback: () => {
+          setTool("select")
+          setDrawingTool(shape)
+        },
+      })),
+    ],
+    {
+      ignoreInputs: true,
+      preventDefault: true,
+      requireReset: true,
+      stopPropagation: true,
+    }
+  )
 
   const requestedRenderScale = Math.min(
     3,
@@ -563,6 +803,55 @@ export function PageCanvas({
   )
   const background = useBackground(page, renderScale)
 
+  const pointerIsOnPage = useCallback(
+    (pointer: ShapePoint) => {
+      const pageX = (pointer.x - viewport.x) / viewport.scale
+      const pageY = (pointer.y - viewport.y) / viewport.scale
+      return (
+        pageX >= 0 &&
+        pageX <= page.widthPt &&
+        pageY >= 0 &&
+        pageY <= page.heightPt
+      )
+    },
+    [page.heightPt, page.widthPt, viewport]
+  )
+
+  const finishDraggedShape = useCallback(
+    (pointer: ShapePoint, constrain: boolean, fromCenter: boolean) => {
+      const draft = dragShapeDraft
+      if (!draft) return
+      let end = getPagePoint(pointer)
+      const distance = Math.hypot(
+        end.x - draft.start.x,
+        end.y - draft.start.y
+      )
+      if (distance < 3 / viewport.scale) {
+        end = {
+          x: Math.min(page.widthPt, draft.start.x + 96),
+          y: Math.min(
+            page.heightPt,
+            draft.start.y + (draft.shape === "line" || draft.shape === "arrow" ? 48 : 72)
+          ),
+        }
+      }
+      const geometry = getDraggedShapeGeometry(draft.shape, draft.start, end, {
+        constrain,
+        fromCenter,
+      })
+      setDragShapeDraft(null)
+      addShapeLayer(draft.shape, geometry)
+    },
+    [
+      addShapeLayer,
+      dragShapeDraft,
+      getPagePoint,
+      page.heightPt,
+      page.widthPt,
+      viewport.scale,
+    ]
+  )
+
   useEffect(() => {
     const transformer = transformerRef.current
     const selectedNode = selectedLayerId
@@ -574,7 +863,11 @@ export function PageCanvas({
 
   const selectedLayer = page.layers.find((layer) => layer.id === selectedLayerId)
   const objectInteractionEnabled =
-    tool === "select" && !spacePressed && !isPanning && !isZoomDragging
+    tool === "select" &&
+    !drawingTool &&
+    !spacePressed &&
+    !isPanning &&
+    !isZoomDragging
   const zoomPercent = Math.round((viewport.scale / fitScale) * 100)
 
   const palette = useMemo(() => {
@@ -585,6 +878,23 @@ export function PageCanvas({
       shadow: styles.getPropertyValue("--paper-shadow").trim(),
     }
   }, [])
+  const dragDraftGeometry = dragShapeDraft
+    ? getDraggedShapeGeometry(
+        dragShapeDraft.shape,
+        dragShapeDraft.start,
+        dragShapeDraft.pointer,
+        {
+          constrain: dragShapeDraft.constrain,
+          fromCenter: dragShapeDraft.fromCenter,
+        }
+      )
+    : null
+  const polygonDraftPoints = [
+    ...polygonPoints,
+    ...(polygonPointer && polygonPoints.length ? [polygonPointer] : []),
+  ].flatMap((point) => [point.x, point.y])
+  const ActiveShapeIcon =
+    SHAPE_TOOLS.find((shape) => shape.value === drawingTool)?.icon ?? SquareIcon
 
   return (
     <div
@@ -593,7 +903,9 @@ export function PageCanvas({
           ? "relative size-full cursor-grabbing overflow-hidden"
           : isZoomDragging
             ? "relative size-full cursor-ns-resize overflow-hidden"
-            : tool === "pan" || spacePressed
+            : drawingTool
+              ? "relative size-full cursor-crosshair overflow-hidden"
+              : tool === "pan" || spacePressed
               ? "relative size-full cursor-grab overflow-hidden"
               : tool === "zoom"
                 ? "relative size-full cursor-zoom-in overflow-hidden"
@@ -627,6 +939,40 @@ export function PageCanvas({
         onMouseDown={(event) => {
           const stage = event.target.getStage()
           const pointer = stage?.getPointerPosition()
+          if (
+            drawingTool &&
+            event.evt.button === 0 &&
+            pointer &&
+            pointerIsOnPage(pointer)
+          ) {
+            event.evt.preventDefault()
+            const pagePoint = getPagePoint(pointer)
+            if (drawingTool === "polygon") {
+              const firstPoint = polygonPoints[0]
+              if (
+                firstPoint &&
+                polygonPoints.length >= 3 &&
+                Math.hypot(
+                  pagePoint.x - firstPoint.x,
+                  pagePoint.y - firstPoint.y
+                ) * viewport.scale <= 12
+              ) {
+                completePolygon()
+              } else {
+                setPolygonPoints((points) => [...points, pagePoint])
+                setPolygonPointer(pagePoint)
+              }
+            } else {
+              setDragShapeDraft({
+                shape: drawingTool,
+                start: pagePoint,
+                pointer: pagePoint,
+                constrain: event.evt.shiftKey,
+                fromCenter: event.evt.altKey,
+              })
+            }
+            return
+          }
           const wantsPan =
             event.evt.button === 1 ||
             (event.evt.button === 0 && (tool === "pan" || spacePressed))
@@ -648,14 +994,86 @@ export function PageCanvas({
         onMouseMove={(event) => {
           const pointer = event.target.getStage()?.getPointerPosition()
           if (!pointer) return
+          if (dragShapeDraft) {
+            setDragShapeDraft((draft) =>
+              draft
+                ? {
+                    ...draft,
+                    pointer: getPagePoint(pointer),
+                    constrain: event.evt.shiftKey,
+                    fromCenter: event.evt.altKey,
+                  }
+                : null
+            )
+            return
+          }
+          if (drawingTool === "polygon" && polygonPoints.length) {
+            setPolygonPointer(getPagePoint(pointer))
+            return
+          }
           if (panStartRef.current) updatePan(pointer)
           else if (zoomDragStartRef.current) updateZoomDrag(pointer)
         }}
-        onMouseUp={endPointerGesture}
-        onMouseLeave={endPointerGesture}
+        onMouseUp={(event) => {
+          const pointer = event.target.getStage()?.getPointerPosition()
+          if (dragShapeDraft && pointer) {
+            finishDraggedShape(
+              pointer,
+              event.evt.shiftKey,
+              event.evt.altKey
+            )
+            return
+          }
+          endPointerGesture()
+        }}
+        onMouseLeave={(event) => {
+          const pointer = event.target.getStage()?.getPointerPosition()
+          if (dragShapeDraft && pointer) {
+            finishDraggedShape(
+              pointer,
+              event.evt.shiftKey,
+              event.evt.altKey
+            )
+            return
+          }
+          endPointerGesture()
+        }}
         onTouchStart={(event) => {
           const touches = event.evt.touches
           const stage = event.target.getStage()
+
+          if (touches.length === 1 && drawingTool) {
+            const pointer = stage?.getPointerPosition()
+            if (!pointer || !pointerIsOnPage(pointer)) return
+            event.evt.preventDefault()
+            event.target.stopDrag()
+            const pagePoint = getPagePoint(pointer)
+            if (drawingTool === "polygon") {
+              const firstPoint = polygonPoints[0]
+              if (
+                firstPoint &&
+                polygonPoints.length >= 3 &&
+                Math.hypot(
+                  pagePoint.x - firstPoint.x,
+                  pagePoint.y - firstPoint.y
+                ) * viewport.scale <= 18
+              ) {
+                completePolygon()
+              } else {
+                setPolygonPoints((points) => [...points, pagePoint])
+                setPolygonPointer(pagePoint)
+              }
+            } else {
+              setDragShapeDraft({
+                shape: drawingTool,
+                start: pagePoint,
+                pointer: pagePoint,
+                constrain: false,
+                fromCenter: false,
+              })
+            }
+            return
+          }
 
           if (
             touches.length === 1 &&
@@ -678,6 +1096,7 @@ export function PageCanvas({
           if (touches.length !== 2) {
             return
           }
+          if (drawingTool) cancelDrawing()
           event.evt.preventDefault()
           event.target.stopDrag()
           endPointerGesture()
@@ -701,6 +1120,24 @@ export function PageCanvas({
         onTouchMove={(event) => {
           const touches = event.evt.touches
           const start = pinchStartRef.current
+          if (touches.length === 1 && dragShapeDraft) {
+            const pointer = event.target.getStage()?.getPointerPosition()
+            if (!pointer) return
+            event.evt.preventDefault()
+            setDragShapeDraft((draft) =>
+              draft ? { ...draft, pointer: getPagePoint(pointer) } : null
+            )
+            return
+          }
+          if (
+            touches.length === 1 &&
+            drawingTool === "polygon" &&
+            polygonPoints.length
+          ) {
+            const pointer = event.target.getStage()?.getPointerPosition()
+            if (pointer) setPolygonPointer(getPagePoint(pointer))
+            return
+          }
           if (touches.length === 1 && !start) {
             const pointer = event.target.getStage()?.getPointerPosition()
             if (!pointer) return
@@ -736,6 +1173,17 @@ export function PageCanvas({
           )
         }}
         onTouchEnd={(event) => {
+          if (dragShapeDraft && event.evt.touches.length === 0) {
+            finishDraggedShape(
+              {
+                x: viewport.x + dragShapeDraft.pointer.x * viewport.scale,
+                y: viewport.y + dragShapeDraft.pointer.y * viewport.scale,
+              },
+              false,
+              false
+            )
+            return
+          }
           if (event.evt.touches.length < 2) {
             pinchStartRef.current = null
             endPointerGesture()
@@ -790,11 +1238,13 @@ export function PageCanvas({
               shouldOverdrawWholeArea
               keepRatio={selectedLayer?.type === "image"}
               enabledAnchors={
-                selectedLayer?.type === "image"
+                selectedLayer?.type === "image" ||
+                selectedLayer?.type === "shape"
                   ? ALL_RESIZE_ANCHORS
-                  : selectedLayer && getTextResizeMode(selectedLayer) === "fixed"
+                  : selectedLayer?.type === "text" &&
+                      getTextResizeMode(selectedLayer) === "fixed"
                     ? ALL_RESIZE_ANCHORS
-                    : selectedLayer &&
+                    : selectedLayer?.type === "text" &&
                         getTextResizeMode(selectedLayer) === "auto-height"
                       ? HORIZONTAL_RESIZE_ANCHORS
                       : []
@@ -811,15 +1261,93 @@ export function PageCanvas({
             />
           </Group>
         </KonvaLayer>
+        {/* Keep the transient preview last so document layers cannot cover it. */}
+        <KonvaLayer listening={false}>
+          <Group
+            x={viewport.x}
+            y={viewport.y}
+            scaleX={viewport.scale}
+            scaleY={viewport.scale}
+          >
+            {dragShapeDraft && dragDraftGeometry && (
+              <Group x={dragDraftGeometry.x} y={dragDraftGeometry.y}>
+                {dragShapeDraft.shape === "rectangle" ? (
+                  <Rect
+                    width={dragDraftGeometry.width}
+                    height={dragDraftGeometry.height}
+                    stroke={palette.primary}
+                    strokeWidth={1.5 / viewport.scale}
+                  />
+                ) : dragShapeDraft.shape === "ellipse" ? (
+                  <KonvaEllipse
+                    x={dragDraftGeometry.width / 2}
+                    y={dragDraftGeometry.height / 2}
+                    radiusX={dragDraftGeometry.width / 2}
+                    radiusY={dragDraftGeometry.height / 2}
+                    stroke={palette.primary}
+                    strokeWidth={1.5 / viewport.scale}
+                  />
+                ) : dragShapeDraft.shape === "arrow" ? (
+                  <KonvaArrow
+                    points={dragDraftGeometry.points.flatMap((value, index) =>
+                      index % 2 === 0
+                        ? [value * dragDraftGeometry.width]
+                        : [value * dragDraftGeometry.height]
+                    )}
+                    stroke={palette.primary}
+                    fill={palette.primary}
+                    strokeWidth={1.5 / viewport.scale}
+                    pointerLength={10 / viewport.scale}
+                    pointerWidth={10 / viewport.scale}
+                  />
+                ) : (
+                  <KonvaLine
+                    points={dragDraftGeometry.points.flatMap((value, index) =>
+                      index % 2 === 0
+                        ? [value * dragDraftGeometry.width]
+                        : [value * dragDraftGeometry.height]
+                    )}
+                    stroke={palette.primary}
+                    strokeWidth={1.5 / viewport.scale}
+                  />
+                )}
+              </Group>
+            )}
+            {drawingTool === "polygon" && polygonDraftPoints.length >= 2 && (
+              <>
+                <KonvaLine
+                  points={polygonDraftPoints}
+                  stroke={palette.primary}
+                  strokeWidth={1.5 / viewport.scale}
+                  lineJoin="round"
+                />
+                {polygonPoints.map((point, index) => (
+                  <KonvaCircle
+                    key={`${point.x}-${point.y}-${index}`}
+                    x={point.x}
+                    y={point.y}
+                    radius={(index === 0 ? 6 : 4) / viewport.scale}
+                    fill={palette.paper}
+                    stroke={palette.primary}
+                    strokeWidth={1.5 / viewport.scale}
+                  />
+                ))}
+              </>
+            )}
+          </Group>
+        </KonvaLayer>
       </Stage>
 
       {showControls && (
-      <div className="canvas-controls" role="toolbar" aria-label="Canvas view">
+        <div className="canvas-controls" role="toolbar" aria-label="Canvas view">
         <ToggleGroup
           value={[tool]}
           onValueChange={(value) => {
             const nextTool = value[0] as CanvasTool | undefined
-            if (nextTool) setTool(nextTool)
+            if (nextTool) {
+              setTool(nextTool)
+              setDrawingTool(null)
+            }
           }}
           spacing={0}
           aria-label="Canvas tools"
@@ -834,6 +1362,44 @@ export function PageCanvas({
             <SearchIcon />
           </CanvasToolControl>
         </ToggleGroup>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className={cn(
+                        drawingTool && "bg-accent text-accent-foreground"
+                      )}
+                      aria-label="Shape tools"
+                    />
+                  }
+                />
+              }
+            >
+              <ActiveShapeIcon />
+            </TooltipTrigger>
+            <TooltipContent>Shape tools</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent side="top" align="start">
+            <DropdownMenuGroup>
+              {SHAPE_TOOLS.map(({ value, label, icon: Icon }) => (
+                <DropdownMenuItem
+                  key={value}
+                  onClick={() => {
+                    setTool("select")
+                    setDrawingTool(value)
+                  }}
+                >
+                  <Icon /> {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Separator orientation="vertical" />
         <CanvasControl
           label="Zoom out · −"
@@ -865,7 +1431,26 @@ export function PageCanvas({
         >
           <PlusIcon />
         </CanvasControl>
-      </div>
+        </div>
+      )}
+
+      {drawingTool === "polygon" && polygonPoints.length > 0 && (
+        <div
+          className="polygon-drawing-controls"
+          role="toolbar"
+          aria-label="Polygon drawing"
+        >
+          <Button variant="ghost" size="sm" onClick={cancelDrawing}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={polygonPoints.length < 3}
+            onClick={completePolygon}
+          >
+            Done
+          </Button>
+        </div>
       )}
     </div>
   )

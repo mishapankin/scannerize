@@ -6,6 +6,14 @@ export const EDITOR_SHORTCUTS = {
   exportPdf: "Mod+Alt+E",
   undo: "Mod+Z",
   redo: "Mod+Shift+Z",
+  selectTool: "V",
+  panTool: "H",
+  zoomTool: "Z",
+  rectangleTool: "R",
+  ellipseTool: "O",
+  lineTool: "L",
+  arrowTool: "A",
+  polygonTool: "P",
 } as const satisfies Record<string, Hotkey>
 
 type ShortcutPlatform = "mac" | "windows" | "linux"

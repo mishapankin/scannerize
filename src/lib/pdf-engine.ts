@@ -8,7 +8,12 @@ import {
   type ExportSettings,
 } from "@/lib/export-plan"
 import { getTextLines, getTextResizeMode } from "@/lib/text-layout"
-import type { EditorLayer, EditorPage } from "@/types/editor"
+import {
+  getScaledShapePoints,
+  isShapeFillEnabled,
+  isShapeStrokeEnabled,
+} from "@/lib/shape-geometry"
+import type { EditorLayer, EditorPage, ShapeLayer } from "@/types/editor"
 
 type PdfSource = {
   id: string
@@ -144,6 +149,93 @@ function drawTextLayer(
   }
 }
 
+function drawShapeLayer(
+  context: CanvasRenderingContext2D,
+  layer: ShapeLayer
+) {
+  const points = getScaledShapePoints(layer)
+  const fillEnabled = isShapeFillEnabled(layer)
+  const strokeEnabled = isShapeStrokeEnabled(layer)
+  context.lineCap = "round"
+  context.lineJoin = "round"
+  context.lineWidth = layer.strokeWidth
+
+  if (fillEnabled && layer.fill) context.fillStyle = layer.fill
+  if (strokeEnabled && layer.stroke) context.strokeStyle = layer.stroke
+
+  context.beginPath()
+  switch (layer.shape) {
+    case "rectangle":
+      context.rect(0, 0, layer.width, layer.height)
+      break
+    case "ellipse":
+      context.ellipse(
+        layer.width / 2,
+        layer.height / 2,
+        layer.width / 2,
+        layer.height / 2,
+        0,
+        0,
+        Math.PI * 2
+      )
+      break
+    case "polygon":
+      if (points.length >= 6) {
+        context.moveTo(points[0], points[1])
+        for (let index = 2; index < points.length; index += 2) {
+          context.lineTo(points[index], points[index + 1])
+        }
+        context.closePath()
+      }
+      break
+    case "line":
+    case "arrow":
+      if (points.length >= 4) {
+        context.moveTo(points[0], points[1])
+        context.lineTo(points[2], points[3])
+      }
+      break
+  }
+
+  if (
+    fillEnabled &&
+    layer.fill &&
+    (layer.shape === "rectangle" ||
+      layer.shape === "ellipse" ||
+      layer.shape === "polygon")
+  ) {
+    context.fill()
+  }
+  if (strokeEnabled && layer.stroke && layer.strokeWidth > 0) context.stroke()
+
+  if (
+    layer.shape === "arrow" &&
+    strokeEnabled &&
+    layer.stroke &&
+    points.length >= 4
+  ) {
+    const startX = points[0]
+    const startY = points[1]
+    const endX = points[2]
+    const endY = points[3]
+    const angle = Math.atan2(endY - startY, endX - startX)
+    const headLength = Math.max(8, layer.strokeWidth * 5)
+    context.beginPath()
+    context.moveTo(endX, endY)
+    context.lineTo(
+      endX - Math.cos(angle - Math.PI / 6) * headLength,
+      endY - Math.sin(angle - Math.PI / 6) * headLength
+    )
+    context.lineTo(
+      endX - Math.cos(angle + Math.PI / 6) * headLength,
+      endY - Math.sin(angle + Math.PI / 6) * headLength
+    )
+    context.closePath()
+    context.fillStyle = layer.stroke
+    context.fill()
+  }
+}
+
 function drawLayer(context: CanvasRenderingContext2D, layer: EditorLayer) {
   if (!layer.visible) return
 
@@ -157,8 +249,10 @@ function drawLayer(context: CanvasRenderingContext2D, layer: EditorLayer) {
     if (asset) {
       context.drawImage(asset.image, 0, 0, layer.width, layer.height)
     }
-  } else {
+  } else if (layer.type === "text") {
     drawTextLayer(context, layer)
+  } else {
+    drawShapeLayer(context, layer)
   }
 
   context.restore()
